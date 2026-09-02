@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { OUTREACH_TABLE } from '@/lib/outreach-types';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
     const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
@@ -9,65 +12,33 @@ export async function GET() {
     }
 
     const baseUrl = `${supabaseUrl.replace(/\/$/, "")}/rest/v1`;
-
     const headers = {
         "apikey": secretKey,
         "Authorization": `Bearer ${secretKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     };
 
-    const fetchTable = async (tableName: string) => {
-        const url = `${baseUrl}${tableName}?select=*`;
-
-        // Stable timeout for Node 22
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-        try {
-            const response = await fetch(url, {
-                headers,
-                cache: 'no-store',
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("text/html")) {
-                console.error(`Error: HTML returned from ${url}. Endpoint might be wrong.`);
-                return [];
-            }
-
-            if (!response.ok) {
-                console.error(`Error fetching ${tableName}:`, await response.text());
-                return [];
-            }
-
-            return response.json();
-        } catch (err: any) {
-            clearTimeout(timeoutId);
-            if (err.name === 'AbortError') {
-                console.error(`Timeout error for ${tableName}: Request aborted after 60s.`);
-            } else {
-                console.error(`Fetch error for ${tableName}:`, err);
-            }
-            return [];
-        }
-    };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-        const [nr_wf, followup, nurture] = await Promise.all([
-            fetchTable("nr_wf"),
-            fetchTable("followup"),
-            fetchTable("nurture")
-        ]);
-
-        return NextResponse.json({
-            nr_wf,
-            followup,
-            nurture
+        const response = await fetch(`${baseUrl}/${OUTREACH_TABLE}?select=*`, {
+            headers,
+            cache: 'no-store',
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
+        if (!response.ok) {
+            console.error('Error fetching outreach_table:', await response.text());
+            return NextResponse.json({ outreach: [] });
+        }
+
+        const outreach = await response.json();
+        // legacy keys kept so old consumers don't crash
+        return NextResponse.json({ outreach, nr_wf: outreach, followup: [], nurture: [] });
     } catch (error: any) {
+        clearTimeout(timeoutId);
         console.error('Raw fetch error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

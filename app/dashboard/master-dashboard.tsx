@@ -92,18 +92,22 @@ export default function MasterDashboard() {
         to: new Date(),
     });
 
-    const { leads: allLeads, loadingLeads, refreshLeads, calls, loadingCalls, refreshCalls } = useData();
+    const {
+        leads: allLeads, loadingLeads, refreshLeads, calls, loadingCalls, refreshCalls,
+        masterLeadsTotal, loadingMasterLeadsTotal, refreshMasterLeadsTotal,
+    } = useData();
     const router = useRouter();
 
     useEffect(() => {
         if (!dateRange?.from) return;
         refreshLeads({ from: dateRange.from, to: dateRange.to || dateRange.from });
         refreshCalls({ from: dateRange.from, to: dateRange.to || dateRange.from });
-    }, [dateRange, refreshLeads, refreshCalls]);
+        refreshMasterLeadsTotal({ from: dateRange.from, to: dateRange.to || dateRange.from });
+    }, [dateRange, refreshLeads, refreshCalls, refreshMasterLeadsTotal]);
 
     const loading = loadingLeads;
 
-    /* ── Combined metrics from nr_wf + nurture ── */
+    /* ── Combined metrics from outreach_table + vapi_call_logs ── */
     const metrics = useMemo(() => {
         if (loadingLeads) return null;
 
@@ -119,106 +123,38 @@ export default function MasterDashboard() {
         let totalLeads = 0;
         let totalEmailsSent = 0;
         let totalEmailReplies = 0;
-        let totalUnsubscribed = 0;
-        let totalBounced = 0;
         let totalWaReachouts = 0;
         let totalWaReplies = 0;
-        let introLeads = 0;
-        let nurtureLeads = 0;
 
         allLeads.forEach((lead: any) => {
-            const src = (lead.source_loop || "").toLowerCase();
-            const isIntro = src === 'nr_wf' || src === 'intro';
-            const isNurture = src === 'nurture';
+            if (inRange(lead.created_at)) totalLeads++;
 
-            // Count all leads in range
-            if (inRange(lead.created_at)) {
-                totalLeads++;
-                if (isIntro) introLeads++;
-                if (isNurture) nurtureLeads++;
-            }
+            // Emails sent — count every populated email_N slot
+            (lead.email_slots || []).forEach((s: any) => {
+                if (s.raw != null || s.sent_at || s.status) totalEmailsSent++;
+            });
+            if (lead.email_replied) totalEmailReplies++;
 
-            // Email: count using Email 1/2/3_TS for intro/followup, fallback to stages_passed
-            // For nurture, count from stages_passed (no timestamp columns)
-            if (isNurture) {
-                const stages = lead.stages_passed || [];
-                const fallbackDate = lead.email_sent_at || lead.updated_at || lead.created_at;
-                stages.forEach((stage: string) => {
-                    if (stage.toLowerCase().startsWith("email_") && inRange(fallbackDate)) totalEmailsSent++;
-                });
-            } else {
-                let countedAny = false;
-                const emailTimestamps = [lead.email_1_ts, lead.email_2_ts, lead.email_3_ts];
-                emailTimestamps.forEach((ts: string | null) => {
-                    if (ts && inRange(ts)) { totalEmailsSent++; countedAny = true; }
-                });
-                if (!countedAny) {
-                    const stages = lead.stages_passed || [];
-                    const fallbackDate = lead.email_sent_at || lead.updated_at || lead.created_at;
-                    stages.forEach((stage: string) => {
-                        if (stage.toLowerCase().startsWith("email_") && inRange(fallbackDate)) totalEmailsSent++;
-                    });
-                }
-            }
-
-            // Email replies - prefer user_email_replied from nr_wf, fallback to email_replied
-            const emailReply = lead.user_email_replied || lead.email_replied;
-            if (emailReply && !["no", "none", ""].includes(String(emailReply).toLowerCase().trim())) {
-                const replyDate = lead.email_replied_ts || lead.updated_at || lead.created_at;
-                if (inRange(replyDate)) totalEmailReplies++;
-            }
-
-            // Unsubscribed
-            if (lead.unsubscribed && String(lead.unsubscribed).toLowerCase().includes("yes")) {
-                if (inRange(lead.updated_at || lead.created_at)) totalUnsubscribed++;
-            }
-
-            // Bounced
-            if (lead.email_bounced === true || lead.email_bounced === "true") {
-                totalBounced++;
-            }
-
-            // WhatsApp reachouts: include W.P_1 campaign leads OR conversation-only leads
-            const hasWPCampaign = !!lead['W.P_1'];
-            const hasWAConv = !!(lead.whatsapp_last_contacted && (
-                lead.whatsapp_message_count > 0 ||
-                (Array.isArray(lead.whatsapp_conversation) && lead.whatsapp_conversation.length > 0)
-            ));
-            if (hasWPCampaign || hasWAConv) {
-                const waDate = lead.whatsapp_last_contacted || lead['W.P_1 TS'] || lead['W.P_2 TS'] || lead.created_at;
-                if (inRange(waDate)) totalWaReachouts++;
-            }
-
-            // WhatsApp replies: check whatsapp_conversation for user msgs, fallback to WP_Replied_track
-            const waConv = Array.isArray(lead.whatsapp_conversation) ? lead.whatsapp_conversation : [];
-            const hasWaConvReply = waConv.some((m: any) => m.role === 'user' || m.role === 'User');
-            const wpTrack = lead.WP_Replied_track || lead['WP_Replied_track'];
-            const hasWpReply = !!(wpTrack && String(wpTrack).trim() && !['no', 'none'].includes(String(wpTrack).trim().toLowerCase()));
-            if (hasWaConvReply || hasWpReply) {
-                if (inRange(lead.whatsapp_last_contacted || lead.created_at)) totalWaReplies++;
-            }
-
-            // Voice calls - counted from vapi_call_logs via calls array below
+            // WhatsApp reachouts — any wa_N slot or a conversation
+            const hasWa = (lead.wa_slots || []).length > 0 ||
+                (Array.isArray(lead.whatsapp_conversation) && lead.whatsapp_conversation.length > 0);
+            if (hasWa) totalWaReachouts++;
+            if (lead.whatsapp_replied) totalWaReplies++;
         });
 
-        // Count voice calls from vapi_call_logs
+        // Voice calls from vapi_call_logs (already date-scoped by refreshCalls)
         let totalVoiceCalls = 0;
         if (calls && calls.length > 0) {
             calls.forEach((call: any) => {
-                const callDate = call.startedAt;
-                if (callDate && inRange(callDate)) totalVoiceCalls++;
+                if (call.startedAt && inRange(call.startedAt)) totalVoiceCalls++;
             });
         }
 
         return {
             totalLeads,
-            introLeads,
-            nurtureLeads,
             totalEmailsSent,
             totalEmailReplies,
             emailReplyRate: totalEmailsSent > 0 ? ((totalEmailReplies / totalEmailsSent) * 100).toFixed(1) : '0',
-            totalUnsubscribed,
-            totalBounced,
             totalWaReachouts,
             totalWaReplies,
             waReplyRate: totalWaReachouts > 0 ? ((totalWaReplies / totalWaReachouts) * 100).toFixed(1) : '0',
@@ -278,8 +214,8 @@ export default function MasterDashboard() {
             <div className="metric-grid-7">
                 <MetricTile
                     title="Total Leads"
-                    value={loading ? '—' : (m?.totalLeads ?? 0).toLocaleString()}
-                    trend="Active Leads"
+                    value={loadingMasterLeadsTotal && masterLeadsTotal == null ? '—' : (masterLeadsTotal ?? 0).toLocaleString()}
+                    trend="From master_leads"
                     trendDir="neutral"
                     accentColor="var(--blue)"
                     icon={<Users size={17} />}
@@ -325,7 +261,7 @@ export default function MasterDashboard() {
                 <MetricTile
                     title="Voice Calls"
                     value={loading ? '—' : (m?.totalVoiceCalls ?? 0).toLocaleString()}
-                    trend="From both loops"
+                    trend="AI voice agent"
                     trendDir="neutral"
                     accentColor="var(--orange)"
                     icon={<Phone size={17} />}
@@ -349,7 +285,7 @@ export default function MasterDashboard() {
                             <h3 style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.022em', color: 'var(--label-primary)' }}>
                                 Lead Acquisition
                             </h3>
-                            <p style={{ fontSize: 12, color: 'var(--label-tertiary)' }}>Daily new leads across both loops</p>
+                            <p style={{ fontSize: 12, color: 'var(--label-tertiary)' }}>Daily new leads</p>
                         </div>
                     </div>
                     <div style={{ height: 280 }}>

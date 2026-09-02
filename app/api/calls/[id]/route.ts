@@ -18,16 +18,18 @@ export async function GET(
         if (supabaseUrl && secretKey) {
             try {
                 const headers = { "apikey": secretKey, "Authorization": `Bearer ${secretKey}` };
-                const tables = ["nr_wf", "followup", "nurture"];
-                const results = await Promise.all(tables.map(t => fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/${t}?select=name,phone`, { headers }).then(r => r.json())));
-                results.forEach(data => {
-                    if (Array.isArray(data)) {
-                        data.forEach(l => {
-                            const clean = String(l.phone || "").replace(/\D/g, '');
-                            if (clean && l.name) leadsMap.set(clean, l.name);
-                        });
-                    }
-                });
+                const res = await fetch(
+                    `${supabaseUrl.replace(/\/$/, "")}/rest/v1/outreach_table?select=full_name,first_name,last_name,phone`,
+                    { headers }
+                );
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    data.forEach(l => {
+                        const clean = String(l.phone || "").replace(/\D/g, '');
+                        const name = String(l.full_name || [l.first_name, l.last_name].filter(Boolean).join(' ') || '').trim();
+                        if (clean && name) leadsMap.set(clean, name);
+                    });
+                }
             } catch (e) { }
         }
 
@@ -138,6 +140,24 @@ export async function GET(
                         const call = data[0];
                         const raw = call.raw_data || {};
                         const assistantId = call.assistantId || raw.assistantId || null;
+
+                        // Resolve lead: lead_id primary, phone fallback
+                        let resolvedLeadName = '';
+                        try {
+                            if (call.lead_id) {
+                                const lr = await fetch(
+                                    `${supabaseUrl.replace(/\/$/, "")}/rest/v1/outreach_table?or=(lead_id.eq.${encodeURIComponent(call.lead_id)},crm_id.eq.${encodeURIComponent(call.lead_id)})&select=full_name,first_name,last_name&limit=1`,
+                                    { headers }
+                                );
+                                const lj = await lr.json();
+                                if (Array.isArray(lj) && lj[0]) {
+                                    resolvedLeadName = String(lj[0].full_name || [lj[0].first_name, lj[0].last_name].filter(Boolean).join(' ') || '').trim();
+                                }
+                            }
+                            if (!resolvedLeadName) {
+                                resolvedLeadName = resolveName(call.customer_name, call.customer_phone) || '';
+                            }
+                        } catch { }
                         const assistantIdToPhone: Record<string, string> = {
                             '70f05e16-18f3-4f6e-964a-f47b299c6c1d': '97148714150',
                             'b35e3032-7865-4913-ba22-a913b5d4117b': '14782159151',
@@ -154,6 +174,8 @@ export async function GET(
                         return NextResponse.json({
                             ...raw, // Spreads real Vapi fields back out
                             id: call.id,
+                            name: resolvedLeadName || 'Guest',
+                            leadId: call.lead_id || null,
                             transcript: call.transcript || raw.transcript || [],
                             analysis: { ...raw.analysis, summary: call.summary },
                             callSummary: call.summary,

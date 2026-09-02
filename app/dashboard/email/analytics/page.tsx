@@ -22,6 +22,8 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { subDays, format } from "date-fns";
 import { useData } from "@/context/DataContext";
+import { coerceTimestamp } from "@/lib/outreach-types";
+import type { OutreachLead } from "@/lib/outreach-types";
 
 export default function EmailAnalyticsPage() {
     const { leads: allLeads, loadingLeads } = useData();
@@ -31,37 +33,31 @@ export default function EmailAnalyticsPage() {
     });
 
     const leadStats = useMemo(() => {
-        if (loadingLeads) return { totalSent: 0, totalReplies: 0, totalUnsubscribed: 0, totalLeads: 0 };
+        if (loadingLeads) return { totalSent: 0, totalReplies: 0, totalNegSentiment: 0, totalLeads: 0 };
         const start = dateRange?.from;
         const end = dateRange?.to;
-
-        const filtered = allLeads.filter(lead => {
-            let hasEmail = false;
-            for (let i = 1; i <= 10; i++) {
-                if (lead[`Email_${i}`] || lead.stage_data?.[`Email_${i}`]) { hasEmail = true; break; }
-            }
-            if (!hasEmail && !lead.email_replied) return false;
-            const dateRef = lead.email_sent_at || lead.created_at || lead.last_contacted || lead.updated_at;
-            if (!dateRef) return false;
-            const leadDate = new Date(dateRef);
-            if (start && leadDate < start) return false;
-            if (end) { const toDate = new Date(end); toDate.setHours(23, 59, 59, 999); if (leadDate > toDate) return false; }
+        const inRange = (d: Date | null) => {
+            if (!d || isNaN(d.getTime())) return false;
+            if (start && d < start) return false;
+            if (end) { const toDate = new Date(end); toDate.setHours(23, 59, 59, 999); if (d > toDate) return false; }
             return true;
+        };
+
+        const filtered = (allLeads as OutreachLead[]).filter(lead => {
+            const hasEmail = lead.email_slots.some(s => s.raw != null || s.sent_at || s.status) || lead.email_replied;
+            if (!hasEmail) return false;
+            const dateRef = coerceTimestamp(lead.email_slots[0]?.sent_at) || lead.created_at || lead.last_activity || lead.updated_at;
+            return inRange(dateRef ? new Date(dateRef) : null);
         });
 
-        let sent = 0, replies = 0, unsubscribed = 0;
+        let sent = 0, replies = 0, negSentiment = 0;
         filtered.forEach(lead => {
-            for (let i = 1; i <= 10; i++) {
-                const val = lead[`Email_${i}`] || lead.stage_data?.[`Email_${i}`];
-                if (val && String(val).trim() !== "" && String(val).toLowerCase() !== "no") sent++;
-            }
-            const isReplied = lead.email_replied && String(lead.email_replied).toLowerCase() !== "no" && String(lead.email_replied).toLowerCase() !== "none";
-            if (isReplied) replies++;
-            const isUnsub = lead.unsubscribed && String(lead.unsubscribed).toLowerCase().includes("yes");
-            if (isUnsub) unsubscribed++;
+            lead.email_slots.forEach(s => { if (s.raw != null || s.sent_at || s.status) sent++; });
+            if (lead.email_replied) replies++;
+            if (String(lead.email_sentiment || "").toLowerCase().includes("negative")) negSentiment++;
         });
 
-        return { totalSent: sent, totalReplies: replies, totalUnsubscribed: unsubscribed, totalLeads: filtered.length };
+        return { totalSent: sent, totalReplies: replies, totalNegSentiment: negSentiment, totalLeads: filtered.length };
     }, [allLeads, loadingLeads, dateRange]);
 
     const chartData = useMemo(() => {
@@ -71,28 +67,19 @@ export default function EmailAnalyticsPage() {
 
         const counts: Record<string, { date: string, sent: number, replies: number }> = {};
 
-        allLeads.forEach(lead => {
-            const dateRef = lead.email_sent_at || lead.created_at || lead.last_contacted || lead.updated_at;
+        (allLeads as OutreachLead[]).forEach(lead => {
+            const dateRef = coerceTimestamp(lead.email_slots[0]?.sent_at) || lead.created_at || lead.last_activity || lead.updated_at;
             if (!dateRef) return;
             const d = new Date(dateRef);
             if (start && d < start) return;
-            if (end) {
-                const toDate = new Date(end);
-                toDate.setHours(23, 59, 59, 999);
-                if (d > toDate) return;
-            }
-            const dateKey = d.toISOString().split('T')[0];
+            if (end) { const toDate = new Date(end); toDate.setHours(23, 59, 59, 999); if (d > toDate) return; }
+            const dateKey = d.toISOString().split("T")[0];
 
             let sent = 0;
-            for (let i = 1; i <= 10; i++) {
-                const val = lead[`Email_${i}`] || lead.stage_data?.[`Email_${i}`];
-                if (val && String(val).trim() !== "" && String(val).toLowerCase() !== "no") sent++;
-            }
-            const isReplied = lead.email_replied && String(lead.email_replied).toLowerCase() !== "no" && String(lead.email_replied).toLowerCase() !== "none";
+            lead.email_slots.forEach(s => { if (s.raw != null || s.sent_at || s.status) sent++; });
+            const isReplied = lead.email_replied;
 
-            if (!counts[dateKey]) {
-                counts[dateKey] = { date: dateKey, sent: 0, replies: 0 };
-            }
+            if (!counts[dateKey]) counts[dateKey] = { date: dateKey, sent: 0, replies: 0 };
             counts[dateKey].sent += sent;
             if (isReplied) counts[dateKey].replies += 1;
         });
@@ -105,8 +92,8 @@ export default function EmailAnalyticsPage() {
             }));
     }, [allLeads, loadingLeads, dateRange]);
 
-    const { totalSent, totalReplies, totalUnsubscribed, totalLeads } = leadStats;
-    const replyRate = totalLeads > 0 ? ((totalReplies / totalLeads) * 100).toFixed(2) : "0.00";
+    const { totalSent, totalReplies, totalNegSentiment, totalLeads } = leadStats;
+    const replyRate = totalSent > 0 ? ((totalReplies / totalSent) * 100).toFixed(2) : "0.00";
 
     return (
         <div className="space-y-6 pb-10 relative min-h-[500px]">
@@ -129,8 +116,8 @@ export default function EmailAnalyticsPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <MetricCard label="Total Sent" value={totalSent.toLocaleString()} icon={Send} color="var(--blue)" />
                     <MetricCard label="Replies" value={totalReplies.toLocaleString()} subtext={`${replyRate}% Rate`} icon={TrendingUp} color="var(--blue)" />
-                    <MetricCard label="Unsubscribed" value={totalUnsubscribed.toLocaleString()} icon={AlertTriangle} color="var(--orange)" />
-                    <MetricCard label="Total Leads" value={totalLeads.toLocaleString()} icon={Users} color="var(--label-secondary)" />
+                    <MetricCard label="Negative Sentiment" value={totalNegSentiment.toLocaleString()} icon={AlertTriangle} color="var(--orange)" />
+                    <MetricCard label="Leads Emailed" value={totalLeads.toLocaleString()} icon={Users} color="var(--label-secondary)" />
                 </div>
             </div>
 

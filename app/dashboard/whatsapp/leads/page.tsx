@@ -27,6 +27,7 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { WhatsAppChatDetail } from "@/components/dashboard/whatsapp-chat-detail";
 import { WorldWideLoader } from "@/components/world-wide-loader";
+import { isReplyTrackPositive, coerceTimestamp } from "@/lib/outreach-types";
 
 interface UnifiedLead {
     id: string;
@@ -39,10 +40,8 @@ interface UnifiedLead {
 }
 
 function getLeadDate(lead: any): Date | null {
-    const lct = lead["whatsapp_last_contacted"] || lead["wp1_parsed_date"];
-    if (lct) { const d = new Date(lct); if (!isNaN(d.getTime())) return d; }
-    const rawDate = lead["W.P_1 TS"] || lead["W.P_2 TS"];
-    if (rawDate) { const d = new Date(String(rawDate).trim()); if (!isNaN(d.getTime())) return d; }
+    const ref = coerceTimestamp(lead.wa_1_sent_at) || lead.last_activity || lead.created_at;
+    if (ref) { const d = new Date(ref); if (!isNaN(d.getTime())) return d; }
     return null;
 }
 
@@ -89,20 +88,20 @@ export default function WhatsappLeadsPage() {
         const list: UnifiedLead[] = [];
 
         waLeads.forEach((lead, idx) => {
-            const id = String(lead["Lead ID"] || lead.id || `lead-${idx}`);
-            const wtR = lead["WP_Replied_track"];
-            let hasReplied = !!(wtR && wtR !== "" && String(wtR).trim().toLowerCase() !== "no" && String(wtR).trim().toLowerCase() !== "none");
+            const id = String(lead.lead_id || lead.crm_id || lead.id || `lead-${idx}`);
+            let hasReplied = isReplyTrackPositive(lead.whatsapp_reply_track);
             if (!hasReplied && Array.isArray(lead.whatsapp_conversation)) {
                 hasReplied = lead.whatsapp_conversation.some((m: any) => {
                     const role = m.role || m.type || m.sender;
-                    return role === 'user' || role === 'User';
+                    return role === 'user' || role === 'User' || role === 'customer';
                 });
             }
+            const fullName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || "—";
             list.push({
                 id,
-                name: lead["Name"] || "—",
-                phone: lead["Phone"] || "—",
-                email: lead["Email"],
+                name: fullName,
+                phone: lead.phone || "—",
+                email: lead.email,
                 hasReplied,
                 date: getLeadDate(lead),
                 raw: lead

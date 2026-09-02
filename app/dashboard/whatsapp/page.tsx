@@ -10,6 +10,21 @@ import {
 } from "recharts";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
+import { isReplyTrackPositive, coerceTimestamp } from "@/lib/outreach-types";
+
+function waActivity(lead: any) {
+    let sent = 0;
+    for (let n = 1; n <= 4; n++) if (lead[`wa_${n}`]) sent++;
+    const conv = Array.isArray(lead.whatsapp_conversation) ? lead.whatsapp_conversation : [];
+    const convSent = conv.filter((m: any) => {
+        const r = m?.role || m?.type || m?.sender;
+        return r === "assistant" || r === "bot" || r === "agent";
+    }).length;
+    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) ||
+        conv.some((m: any) => { const r = m?.role || m?.type || m?.sender; return r === "user" || r === "User" || r === "customer"; });
+    const lastDate = coerceTimestamp(lead.wa_1_sent_at) || lead.last_activity || lead.created_at || null;
+    return { sent: convSent || sent, replied, lastDate };
+}
 
 /* ── Apple Metric Tile ── */
 function MetricTile({ title, value, accentColor, icon, onClick, info }: {
@@ -97,61 +112,33 @@ export default function WhatsAppDashboardPage() {
 
         const from = dateRange?.from ? startOfDay(new Date(dateRange.from)).getTime() : null;
         const to = endOfDay(new Date(dateRange?.to || dateRange?.from || new Date())).getTime();
-        const inRange = (t: number) => !from || (t >= from && t <= to);
-
-        const inRangeLeads = allLeads.filter((lead: any) => {
-            const hasWPActivity = !!lead["W.P_1"];
-            const hasConvActivity = !!(lead["whatsapp_last_contacted"] && lead["whatsapp_message_count"] > 0);
-            if (!hasWPActivity && !hasConvActivity) return false;
-
-            const lct = lead["whatsapp_last_contacted"] ?? null;
-            const lctT = lct ? new Date(lct).getTime() : null;
-            if (lctT && inRange(lctT)) return true;
-
-            const wp1ts = lead["wp1_parsed_date"] ?? lead["W.P_1 TS"] ?? lead["W.P_2 TS"] ?? null;
-            const wp1t = wp1ts ? new Date(String(wp1ts).trim()).getTime() : null;
-            if (wp1t && inRange(wp1t)) return true;
-
-            return !from;
-        });
+        const inRange = (t: number | null) => !from || (t != null && t >= from && t <= to);
 
         let sentCount = 0;
         let totalReplies = 0;
+        let uniqueSentCount = 0;
         const dailyMap: Record<string, { reachouts: number; replies: number }> = {};
 
-        inRangeLeads.forEach((lead: any) => {
-            const conv = Array.isArray(lead.whatsapp_conversation) ? lead.whatsapp_conversation : [];
-            if (conv.length > 0) {
-                sentCount += conv.filter((m: any) => m.role === 'assistant' || m.role === 'bot').length;
-            } else {
-                for (let i = 1; i <= 12; i++) { if (lead[`W.P_${i}`]) sentCount++; }
-            }
+        allLeads.forEach((lead: any) => {
+            const a = waActivity(lead);
+            const t = a.lastDate ? new Date(a.lastDate).getTime() : null;
+            if (!inRange(t)) return;
 
-            const wp = lead["WP_Replied_track"];
-            let hasReplied = !!(wp && String(wp).trim() && !['no', 'none'].includes(String(wp).trim().toLowerCase()));
-            if (!hasReplied && conv.length > 0) {
-                hasReplied = conv.some((m: any) => m.role === 'user' || m.role === 'User');
-            }
-            if (hasReplied) totalReplies++;
+            uniqueSentCount++;
+            sentCount += a.sent;
+            if (a.replied) totalReplies++;
 
-            const dateRef = lead["whatsapp_last_contacted"] ?? lead["W.P_1 TS"] ?? lead["wp1_parsed_date"] ?? lead["W.P_2 TS"];
-            if (dateRef) {
-                const dayKey = new Date(dateRef).toISOString().slice(0, 10);
+            if (a.lastDate) {
+                const dayKey = new Date(a.lastDate).toISOString().slice(0, 10);
                 if (!dailyMap[dayKey]) dailyMap[dayKey] = { reachouts: 0, replies: 0 };
                 dailyMap[dayKey].reachouts++;
-                if (hasReplied) dailyMap[dayKey].replies++;
+                if (a.replied) dailyMap[dayKey].replies++;
             }
         });
 
         const dailyTrend = Object.entries(dailyMap).sort(([a], [b]) => a.localeCompare(b)).map(([date, vals]) => ({ date, ...vals }));
 
-        return {
-            totalLeads: allLeads.length,
-            sentCount,
-            uniqueSentCount: inRangeLeads.length,
-            totalReplies,
-            dailyTrend,
-        };
+        return { totalLeads: allLeads.length, sentCount, uniqueSentCount, totalReplies, dailyTrend };
     }, [waData, dateRange]);
 
     const trendData = useMemo(() => stats.dailyTrend.map(d => ({

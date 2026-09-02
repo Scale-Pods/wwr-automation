@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { OUTREACH_TABLE, VAPI_CALL_LOGS, isReplyTrackPositive } from '@/lib/outreach-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,16 +8,18 @@ export interface MasterMetrics {
     oldestLeadDate: string | null;
     totalWaReachouts: number;
     totalWaReplies: number;
+    totalEmailsSent: number;
+    totalEmailReplies: number;
     totalVoiceCalls: number;
+    voiceCallCost: number;
+    leadsDaily: { date: string; leads: number }[];
+    // kept for any component still reading these keys
     ownerVoiceCalls: number;
     normalVapiCost: number;
     ownerVapiCost: number;
-    leadsDaily: { date: string; leads: number }[];
     totalOwnerLeads: number;
     ownerWaReachouts: number;
     ownerWaReplies: number;
-    introLoopLeads: number;
-    nurtureLoopLeads: number;
 }
 
 function endOfDay(iso: string): string {
@@ -28,7 +31,6 @@ function endOfDay(iso: string): string {
 }
 
 const PAGE = 1000;
-
 async function fetchAllPages(url: string, headers: Record<string, string>) {
     const rows: any[] = [];
     let offset = 0;
@@ -45,17 +47,15 @@ async function fetchAllPages(url: string, headers: Record<string, string>) {
 
 export async function GET(req: Request) {
     const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/$/, '');
-    const secretKey   = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-
+    const secretKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
     if (!supabaseUrl || !secretKey) {
         return NextResponse.json({ error: 'Config missing' }, { status: 500 });
     }
 
     const { searchParams } = new URL(req.url);
     const fromISO = searchParams.get('from') || new Date(Date.now() - 7 * 86400000).toISOString();
-    const toISO   = searchParams.get('to') ? endOfDay(searchParams.get('to')!) : endOfDay(new Date().toISOString());
+    const toISO = searchParams.get('to') ? endOfDay(searchParams.get('to')!) : endOfDay(new Date().toISOString());
 
-    // ── Direct Supabase Table Fetching ─────────────────
     const headers: Record<string, string> = {
         apikey: secretKey,
         Authorization: `Bearer ${secretKey}`,
@@ -64,46 +64,42 @@ export async function GET(req: Request) {
         'Cache-Control': 'no-store',
     };
 
-    const colsNrWf = encodeURIComponent([
-        '"Lead ID"', '"W.P_1"', '"Voice 1"', '"Voice 2"',
-        '"WP_Replied_track"', '"Created At"', 'whatsapp_last_contacted',
+    const outreachCols = encodeURIComponent([
+        'created_at',
+        'wa_1', 'wa_2', 'wa_3', 'wa_4', 'wa_1_sent_at',
+        'whatsapp_reply_track',
+        'email_1', 'email_2', 'email_3', 'email_4', 'email_5',
+        'email_reply_track',
     ].join(','));
 
-    const colsNurture = encodeURIComponent([
-        '"Lead ID"', '"W.P_1"',
-        '"W1_voice1"', '"W1_voice2"', '"W2_voice1"', '"W2_voice2"', '"W4_voice1"', '"W4_voice2"',
-        '"WP_Replied_track"', '"Created At"', 'whatsapp_last_contacted',
-    ].join(','));
+    const outreachFilter =
+        `created_at=gte.${encodeURIComponent(fromISO)}&created_at=lte.${encodeURIComponent(toISO)}`;
 
-    const dateFilter = `"Created At"=gte.${encodeURIComponent(fromISO)}&"Created At"=lte.${encodeURIComponent(toISO)}`;
+    const callCols = encodeURIComponent(['id', 'started_at', 'cost_usd'].join(','));
+    const callFilter =
+        `started_at=gte.${encodeURIComponent(fromISO)}&started_at=lte.${encodeURIComponent(toISO)}`;
 
     try {
-        const [nrWfRows, nurtureRows] = await Promise.all([
-            fetchAllPages(`${supabaseUrl}/rest/v1/nr_wf?select=${colsNrWf}&${dateFilter}&order="Created At".desc`, headers),
-            fetchAllPages(`${supabaseUrl}/rest/v1/nurture?select=${colsNurture}&${dateFilter}&order="Created At".desc`, headers),
+        const [rows, callRows] = await Promise.all([
+            fetchAllPages(`${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${outreachCols}&${outreachFilter}&order=created_at.desc`, headers),
+            fetchAllPages(`${supabaseUrl}/rest/v1/${VAPI_CALL_LOGS}?select=${callCols}&${callFilter}&order=started_at.desc`, headers)
+                .catch(() => [] as any[]),
         ]);
 
-        const allRows = [...nrWfRows, ...nurtureRows];
-
-        let totalWaReachouts = 0, totalWaReplies = 0, totalVoiceCalls = 0;
+        let totalWaReachouts = 0, totalWaReplies = 0;
+        let totalEmailsSent = 0, totalEmailReplies = 0;
         let oldestDate: string | null = null;
         const dailyMap: Record<string, number> = {};
 
-        allRows.forEach(r => {
-            if (r['W.P_1']) totalWaReachouts++;
-            const wp = r['WP_Replied_track'];
-            if (wp && String(wp).trim() && !['no', 'none'].includes(String(wp).trim().toLowerCase())) totalWaReplies++;
-            // Voice calls: nr_wf has Voice 1/Voice 2, nurture has W1_voice1 etc.
-            if (r['Voice 1']) totalVoiceCalls++;
-            if (r['Voice 2']) totalVoiceCalls++;
-            if (r['W1_voice1']) totalVoiceCalls++;
-            if (r['W1_voice2']) totalVoiceCalls++;
-            if (r['W2_voice1']) totalVoiceCalls++;
-            if (r['W2_voice2']) totalVoiceCalls++;
-            if (r['W4_voice1']) totalVoiceCalls++;
-            if (r['W4_voice2']) totalVoiceCalls++;
+        rows.forEach(r => {
+            const hasWa = !!(r.wa_1 || r.wa_2 || r.wa_3 || r.wa_4);
+            if (hasWa) totalWaReachouts++;
+            if (isReplyTrackPositive(r.whatsapp_reply_track)) totalWaReplies++;
 
-            const dt = r['Created At'];
+            for (let n = 1; n <= 5; n++) if (r[`email_${n}`]) totalEmailsSent++;
+            if (isReplyTrackPositive(r.email_reply_track)) totalEmailReplies++;
+
+            const dt = r.created_at;
             if (dt) {
                 if (!oldestDate || dt < oldestDate) oldestDate = dt;
                 const key = new Date(dt).toISOString().slice(0, 10);
@@ -111,25 +107,29 @@ export async function GET(req: Request) {
             }
         });
 
+        let voiceCallCost = 0;
+        callRows.forEach(c => { voiceCallCost += Number(c.cost_usd) || 0; });
+
         const leadsDaily = Object.entries(dailyMap)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([date, leads]) => ({ date, leads }));
 
         const metrics: MasterMetrics = {
-            totalLeads: allRows.length,
+            totalLeads: rows.length,
             oldestLeadDate: oldestDate,
             totalWaReachouts,
             totalWaReplies,
-            totalVoiceCalls,
-            ownerVoiceCalls: 0,
-            normalVapiCost: 0,
-            ownerVapiCost: 0,
+            totalEmailsSent,
+            totalEmailReplies,
+            totalVoiceCalls: callRows.length,
+            voiceCallCost,
             leadsDaily,
+            ownerVoiceCalls: 0,
+            normalVapiCost: voiceCallCost,
+            ownerVapiCost: 0,
             totalOwnerLeads: 0,
             ownerWaReachouts: 0,
             ownerWaReplies: 0,
-            introLoopLeads:   nrWfRows.length,
-            nurtureLoopLeads: nurtureRows.length,
         };
 
         return new NextResponse(JSON.stringify(metrics), {
@@ -137,7 +137,7 @@ export async function GET(req: Request) {
             headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate' },
         });
     } catch (err: any) {
-        console.error('[master-metrics] fallback error:', err);
+        console.error('[master-metrics] error:', err);
         return NextResponse.json({ error: 'Fetch failed', detail: err.message }, { status: 500 });
     }
 }

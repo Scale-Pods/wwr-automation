@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { consolidateLeads, ConsolidatedLead } from "@/lib/leads-utils";
+import { isReplyTrackPositive } from "@/lib/outreach-types";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 import { useRouter } from 'next/navigation';
 import { logout } from '@/app/actions/auth';
@@ -11,11 +12,15 @@ export interface MasterMetrics {
     oldestLeadDate: string | null;
     totalWaReachouts: number;
     totalWaReplies: number;
+    totalEmailsSent: number;
+    totalEmailReplies: number;
     totalVoiceCalls: number;
+    voiceCallCost: number;
+    leadsDaily: { date: string; leads: number }[];
+    // legacy keys — still emitted by the API, kept for older components
     ownerVoiceCalls: number;
     normalVapiCost: number;
     ownerVapiCost: number;
-    leadsDaily: { date: string; leads: number }[];
     totalOwnerLeads: number;
     ownerWaReachouts: number;
     ownerWaReplies: number;
@@ -25,6 +30,7 @@ export interface WhatsappMetrics {
     totalReachouts: number;
     totalReplies: number;
     replyRate: number;
+    totalMessagesSent: number;
     dailyTrend: { date: string; reachouts: number; replies: number }[];
     ownerReachouts: number;
     ownerReplies: number;
@@ -80,6 +86,10 @@ interface DataContextType {
     voiceMetrics: VoiceMetrics | null;
     masterMetrics: MasterMetrics | null;
     whatsappMetrics: WhatsappMetrics | null;
+    /** Total row count of public.master_leads, scoped by the active date range. */
+    masterLeadsTotal: number | null;
+    loadingMasterLeadsTotal: boolean;
+    refreshMasterLeadsTotal: (params?: { from?: Date; to?: Date; force?: boolean }) => Promise<void>;
     voiceBalance: any;
     maqsamBalance: any;
     twilioBalance: any;
@@ -111,6 +121,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const [voiceMetrics, setVoiceMetrics] = useState<VoiceMetrics | null>(null);
     const [masterMetrics, setMasterMetrics] = useState<MasterMetrics | null>(null);
     const [whatsappMetrics, setWhatsappMetrics] = useState<WhatsappMetrics | null>(null);
+    const [masterLeadsTotal, setMasterLeadsTotal] = useState<number | null>(null);
+    const [loadingMasterLeadsTotal, setLoadingMasterLeadsTotal] = useState(true);
     const [voiceBalance, setVoiceBalance] = useState<any>(null);
     const [maqsamBalance, setMaqsamBalance] = useState<any>(null);
     const [twilioBalance, setTwilioBalance] = useState<any>(null);
@@ -308,6 +320,43 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    const lastMasterLeadsTotalParams = useRef<string | null>(null);
+    const hasMasterLeadsTotal = useRef(false);
+
+    const fetchMasterLeadsTotal = useCallback(async (params?: { from?: Date; to?: Date; force?: boolean }) => {
+        try {
+            const now = new Date();
+            const fromDate = params?.from ? startOfDay(params.from) : subDays(startOfDay(now), 7);
+            const toDate = params?.to ? endOfDay(params.to) : endOfDay(now);
+
+            const query = new URLSearchParams({
+                from: fromDate.toISOString(),
+                to: toDate.toISOString(),
+            });
+            const currentQuery = query.toString();
+            if (!params?.force && lastMasterLeadsTotalParams.current === currentQuery && hasMasterLeadsTotal.current) {
+                return;
+            }
+
+            setLoadingMasterLeadsTotal(true);
+            lastMasterLeadsTotalParams.current = currentQuery;
+
+            const response = await fetch(`/api/metrics/master-leads?${currentQuery}`);
+            if (response.ok) {
+                const data: { totalLeads: number } = await response.json();
+                setMasterLeadsTotal(data.totalLeads ?? 0);
+                hasMasterLeadsTotal.current = true;
+            } else {
+                lastMasterLeadsTotalParams.current = null;
+            }
+        } catch (err: any) {
+            console.error('DataProvider master-leads total fetch error:', err);
+            lastMasterLeadsTotalParams.current = null;
+        } finally {
+            setLoadingMasterLeadsTotal(false);
+        }
+    }, []);
+
     const fetchBalances = useCallback(async () => {
         try {
             const [vapiRes, maqsamRes, twilioRes] = await Promise.all([
@@ -330,8 +379,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             fetchVoiceMetrics(params),
             fetchMasterMetrics(params),
             fetchWhatsappMetrics(params),
+            fetchMasterLeadsTotal(params),
         ]);
-    }, [fetchLeads, fetchCalls, fetchBalances, fetchVoiceMetrics, fetchMasterMetrics, fetchWhatsappMetrics]);
+    }, [fetchLeads, fetchCalls, fetchBalances, fetchVoiceMetrics, fetchMasterMetrics, fetchWhatsappMetrics, fetchMasterLeadsTotal]);
 
     const router = useRouter();
 
@@ -381,54 +431,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const fromDate = dateRange?.from ? startOfDay(new Date(dateRange.from)) : null;
         const toDate = dateRange?.to ? endOfDay(new Date(dateRange.to)) : (fromDate ? endOfDay(new Date(fromDate)) : null);
 
-        const toYYYYMMDD = (d: Date) => {
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
-        };
-
         const isWithinRange = (d: Date | null) => {
             if (!fromDate || !toDate) return true;
             if (!d) return false;
-            if (d >= fromDate && d <= toDate) return true;
-            const dStr = toYYYYMMDD(d);
-            return dStr >= toYYYYMMDD(fromDate) && dStr <= toYYYYMMDD(toDate);
+            return d >= fromDate && d <= toDate;
         };
 
         const seen = new Set<string>();
         let count = 0;
 
         leads.forEach((lead: any) => {
-            // Deduplicate
-            const uid = lead["Lead ID"] || lead.id || lead.phone;
+            const uid = lead.lead_id || lead.id || lead.phone;
             if (!uid || seen.has(uid)) return;
             seen.add(uid);
 
-            const track = lead["WP_Replied_track"];
-            if (!track || String(track).trim() === "" || String(track).trim().toLowerCase() === "no") return;
+            if (!isReplyTrackPositive(lead.whatsapp_reply_track) && !lead.whatsapp_replied) return;
 
-            const content = String(track).trim();
-            let replyDate: Date | null = null;
-
-            // ISO regex extraction
-            const isoMatch = content.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^ \n]*)/);
-            if (isoMatch) {
-                const d = new Date(isoMatch[1]);
-                if (!isNaN(d.getTime())) replyDate = d;
-            }
-
-            // Fallback: try direct parse
-            if (!replyDate) {
-                const d = new Date(content);
-                if (!isNaN(d.getTime()) && (content.includes('T') || (content.includes('-') && content.includes(':')))) {
-                    replyDate = d;
-                }
-            }
-
-            if (replyDate && isWithinRange(replyDate)) {
-                count++;
-            }
+            // Best available reply timestamp
+            const ref =
+                lead.last_activity ||
+                (lead.wa_slots?.length ? lead.wa_slots[lead.wa_slots.length - 1].sent_at : null) ||
+                lead.updated_at ||
+                lead.created_at;
+            const d = ref ? new Date(ref) : null;
+            if (isWithinRange(d && !isNaN(d.getTime()) ? d : null)) count++;
         });
 
         return count;
@@ -451,6 +477,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             voiceMetrics,
             masterMetrics,
             whatsappMetrics,
+            masterLeadsTotal,
+            loadingMasterLeadsTotal,
             voiceBalance,
             maqsamBalance,
             twilioBalance,
@@ -462,6 +490,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             refreshVoiceMetrics: fetchVoiceMetrics,
             refreshMasterMetrics: fetchMasterMetrics,
             refreshWhatsappMetrics: fetchWhatsappMetrics,
+            refreshMasterLeadsTotal: fetchMasterLeadsTotal,
             refreshAll,
             computeWPReplies
         }}>
