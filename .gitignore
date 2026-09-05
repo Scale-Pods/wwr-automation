@@ -9,8 +9,11 @@ venv/
 env/
 .env
 .env.local
-bin/
-share/
+/bin/
+**/venv/bin/
+**/venv/share/
+**/env/bin/
+**/env/share/
 
 # Build and Output
 dist/
