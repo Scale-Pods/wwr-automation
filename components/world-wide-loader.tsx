@@ -4,10 +4,12 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 
 interface WorldWideLoaderProps {
+    /** Cover the whole viewport (default). Set false to overlay only the
+     *  nearest positioned ancestor — used for in-panel table loads. */
     fullScreen?: boolean;
 }
 
-export const WorldWideLoader = ({ fullScreen = false }: WorldWideLoaderProps) => {
+export const WorldWideLoader = ({ fullScreen = true }: WorldWideLoaderProps) => {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -24,12 +26,12 @@ export const WorldWideLoader = ({ fullScreen = false }: WorldWideLoaderProps) =>
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: fullScreen ? 'rgba(10,10,15,0.85)' : 'transparent',
+                background: 'var(--loader-scrim, rgba(10,10,15,0.88))',
                 backdropFilter: 'blur(8px)',
                 WebkitBackdropFilter: 'blur(8px)',
                 borderRadius: fullScreen ? 0 : 'inherit',
                 opacity: mounted ? 1 : 0,
-                transition: 'opacity 400ms ease',
+                transition: 'opacity 300ms ease',
             }}
         >
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
@@ -47,14 +49,14 @@ export const WorldWideLoader = ({ fullScreen = false }: WorldWideLoaderProps) =>
                     <div style={{ position: 'absolute', inset: 8, borderRadius: '50%', border: '1.5px solid transparent', borderBottomColor: 'var(--blue)' }} className="animate-[spin_1.5s_linear_infinite_reverse]" />
                     
                     {/* Center Globe Icon */}
-                    <div style={{ position: 'relative', width: 38, height: 38, zIndex: 10 }}>
-                        <Image src="/logo.png" alt="World Wide Real Estate" fill className="object-contain" priority />
+                    <div style={{ position: 'relative', width: 34, height: 34, zIndex: 10 }}>
+                        <Image src="/logo-icon.png" alt="" fill sizes="34px" className="object-contain" priority />
                     </div>
                 </div>
 
                 {/* Brand Text Logo */}
-                <div style={{ position: 'relative', width: 170, height: 40, marginTop: 4 }}>
-                    <Image src="/logo.png" alt="World Wide Real Estate" fill className="object-contain" priority />
+                <div style={{ position: 'relative', width: 170, height: 38, marginTop: 4 }}>
+                    <Image src="/logo-full.png" alt="World Wide Real Estate" fill sizes="170px" className="object-contain" priority />
                 </div>
 
                 {/* Loading Dots */}
