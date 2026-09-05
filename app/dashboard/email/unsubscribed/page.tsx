@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { OutreachLead } from "@/lib/outreach-types";
+import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
+import { boardOf, boardLabel, matchesBoard, type EmailBoardKey } from "@/lib/email-board";
 
 function isUnsubscribed(lead: OutreachLead): boolean {
     if (String(lead.raw?.sync_status || "").toLowerCase().includes("unsub")) return true;
@@ -26,11 +28,12 @@ export default function UnsubscribedPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 30), to: new Date() });
     const [repliedFilter, setRepliedFilter] = useState("all");
+    const [board, setBoard] = useState<EmailBoardKey>("all");
 
     const unsubscribedLeads = useMemo(() => {
         if (loadingLeads) return [];
-        return (allLeads as OutreachLead[]).filter(isUnsubscribed);
-    }, [allLeads, loadingLeads]);
+        return (allLeads as OutreachLead[]).filter(l => matchesBoard(l, board) && isUnsubscribed(l));
+    }, [allLeads, loadingLeads, board]);
 
     const filteredLeads = useMemo(() => {
         return unsubscribedLeads.filter(l => {
@@ -61,7 +64,10 @@ export default function UnsubscribedPage() {
                         {unsubscribedLeads.length} total · {filteredLeads.length} in date range
                     </p>
                 </div>
-                <DateRangePicker onUpdate={(range: any) => setDateRange(range.range)} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <EmailBoardFilter value={board} onChange={setBoard} />
+                    <DateRangePicker onUpdate={(range: any) => setDateRange(range.range)} />
+                </div>
             </div>
 
             <div className="liquid-card" style={{ padding: 0, overflow: "hidden" }}>
@@ -86,7 +92,7 @@ export default function UnsubscribedPage() {
                             <table className="w-full text-left">
                                 <thead style={{ borderBottom: "1px solid var(--hairline)" }}>
                                     <tr style={{ background: "var(--fill-quaternary)" }}>
-                                        {["Name", "Email", "Stage", "Status", "Date"].map(h => (
+                                        {["Name", "Board", "Email", "Stage", "Status", "Date"].map(h => (
                                             <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)" }}>{h}</th>
                                         ))}
                                     </tr>
@@ -99,6 +105,9 @@ export default function UnsubscribedPage() {
                                                 onMouseEnter={e => (e.currentTarget.style.background = "var(--fill-quaternary)")}
                                                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                                                 <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 600, color: "var(--label-primary)" }}>{lead.name || "N/A"}</td>
+                                                <td style={{ padding: "12px 16px", fontSize: 11 }}>
+                                                    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, background: "rgba(10,132,255,0.10)", color: "var(--blue)" }}>{boardLabel(boardOf(lead))}</span>
+                                                </td>
                                                 <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--label-secondary)" }}>
                                                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                                         <Mail style={{ width: 12, height: 12, color: "var(--label-tertiary)", flexShrink: 0 }} />
@@ -118,7 +127,7 @@ export default function UnsubscribedPage() {
                                             </tr>
                                         );
                                     }) : (
-                                        <tr><td colSpan={5} style={{ padding: "60px 16px", textAlign: "center", fontSize: 13, color: "var(--label-tertiary)" }}>{loading ? "Loading..." : "No unsubscribed leads found."}</td></tr>
+                                        <tr><td colSpan={6} style={{ padding: "60px 16px", textAlign: "center", fontSize: 13, color: "var(--label-tertiary)" }}>{loading ? "Loading..." : "No unsubscribed leads found."}</td></tr>
                                     )}
                                 </tbody>
                             </table>

@@ -3,7 +3,7 @@
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Mail, ChevronDown, ChevronUp, Reply, Search, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { Mail, ChevronDown, ChevronUp, Reply, Search, ArrowDownLeft, ArrowUpRight, Link2, Check } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +12,8 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
 import { coerceTimestamp, parseJsonArray, isReplyTrackPositive } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
+import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
+import { boardOf, boardLabel, type EmailBoardKey } from "@/lib/email-board";
 
 type ThreadMsg = {
     direction: "in" | "out";
@@ -139,6 +141,7 @@ export default function ReceivedEmailsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
     const [sortBy, setSortBy] = useState("newest");
+    const [board, setBoard] = useState<EmailBoardKey>("all");
 
     useEffect(() => {
         if (loadingLeads) return;
@@ -151,15 +154,21 @@ export default function ReceivedEmailsPage() {
             const trackDate = extractTrackDate(lead.email_reply_track);
             const lastInbound = [...thread].reverse().find(m => m.direction === "in");
             const replyDate = trackDate || lastInbound?.date || lead.last_activity || lead.updated_at || lead.created_at || new Date().toISOString();
+            const bk = boardOf(lead);
 
             out.push({
                 id: `${lead.lead_id || index}-email-thread`,
+                shareKey: (lead.email && lead.email !== "No Email" ? lead.email : (lead.lead_id || lead.crm_id || "")),
+                board: bk,
+                boardLabel: boardLabel(bk),
                 sender: lead.email || "No Email Provided",
                 senderName: lead.name || "Lead",
                 subject: thread.find(m => m.subject)?.subject || "Email Reply",
                 replyDateISO: replyDate,
                 replyDateLabel: (() => { try { return format(new Date(replyDate), "MMM dd, yyyy • p"); } catch { return "Unknown Date"; } })(),
                 sentiment: lead.email_sentiment || null,
+                propertyType: lead.property_type || "",
+                propertyCategory: lead.property_category || "",
                 messageCount: thread.length,
                 thread,
             });
@@ -171,6 +180,7 @@ export default function ReceivedEmailsPage() {
 
     const filtered = useMemo(() => {
         const result = threads.filter(t => {
+            if (board !== "all" && t.board !== board) return false;
             const q = searchQuery.toLowerCase();
             if (q) {
                 const inThread = t.thread.some((m: ThreadMsg) => m.body.toLowerCase().includes(q));
@@ -190,7 +200,7 @@ export default function ReceivedEmailsPage() {
             const db = new Date(b.replyDateISO).getTime();
             return sortBy === "newest" ? db - da : da - db;
         });
-    }, [threads, searchQuery, dateRange, sortBy]);
+    }, [threads, searchQuery, dateRange, sortBy, board]);
 
     return (
         <div className="space-y-5 pb-10 max-w-5xl mx-auto relative min-h-[500px]">
@@ -220,6 +230,7 @@ export default function ReceivedEmailsPage() {
                         <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "var(--label-tertiary)" }} />
                         <Input placeholder="Search sender or message text..." style={{ paddingLeft: 30, height: 36, background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)", fontSize: 12, borderRadius: "var(--radius-md)" }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
+                    <EmailBoardFilter value={board} onChange={setBoard} />
                     <Select value={sortBy} onValueChange={setSortBy}>
                         <SelectTrigger style={{ width: 140, height: 36, fontSize: 12 }}><SelectValue placeholder="Sort By" /></SelectTrigger>
                         <SelectContent>
@@ -227,7 +238,7 @@ export default function ReceivedEmailsPage() {
                             <SelectItem value="oldest">Oldest First</SelectItem>
                         </SelectContent>
                     </Select>
-                    <button style={{ fontSize: 11, fontWeight: 600, color: "var(--label-secondary)", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", padding: "5px 12px", borderRadius: "var(--radius-sm)", cursor: "pointer", height: 36 }} onClick={() => { setSearchQuery(""); setSortBy("newest"); }}>
+                    <button style={{ fontSize: 11, fontWeight: 600, color: "var(--label-secondary)", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", padding: "5px 12px", borderRadius: "var(--radius-sm)", cursor: "pointer", height: 36 }} onClick={() => { setSearchQuery(""); setSortBy("newest"); setBoard("all"); }}>
                         Reset
                     </button>
                 </div>
@@ -336,6 +347,28 @@ function EmailHtmlModal({ html, open, onOpenChange }: { html: string; open: bool
 function EmailThreadCard({ thread }: { thread: any }) {
     const [isOpen, setIsOpen] = useState(false);
     const [openHtmlIndex, setOpenHtmlIndex] = useState<number | null>(null);
+    const [copied, setCopied] = useState(false);
+
+    const shareUrl = typeof window !== "undefined" && thread.shareKey
+        ? `${window.location.origin}/email/share/${encodeURIComponent(thread.shareKey)}`
+        : "";
+
+    const handleCopyShare = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!shareUrl) return;
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+        } catch {
+            const ta = document.createElement("textarea");
+            ta.value = shareUrl;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand("copy"); } catch { }
+            document.body.removeChild(ta);
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
 
     const renderBody = (msg: ThreadMsg): string => {
         if (msg.bodyHtml) return msg.bodyHtml;
@@ -358,6 +391,15 @@ function EmailThreadCard({ thread }: { thread: any }) {
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
                             <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--label-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread.senderName}</h4>
                             <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, background: "var(--fill-tertiary)", color: "var(--label-secondary)" }}>{thread.messageCount} messages</span>
+                            {thread.board && thread.board !== "leads" && (
+                                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, background: "rgba(10,132,255,0.12)", color: "var(--blue)", border: "1px solid rgba(10,132,255,0.25)" }}>{thread.boardLabel}</span>
+                            )}
+                            {thread.board === "leads" && (
+                                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, background: "rgba(48,209,88,0.12)", color: "var(--green)", border: "1px solid rgba(48,209,88,0.25)" }}>Leads</span>
+                            )}
+                            {thread.propertyType && (
+                                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "rgba(175,82,222,0.12)", color: "var(--purple)", border: "1px solid rgba(175,82,222,0.25)" }}>{thread.propertyType}</span>
+                            )}
                             {thread.sentiment && (
                                 <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", background: "rgba(175,82,222,0.10)", color: "var(--purple)" }}>{thread.sentiment}</span>
                             )}
@@ -375,6 +417,23 @@ function EmailThreadCard({ thread }: { thread: any }) {
             </CollapsibleTrigger>
             <CollapsibleContent>
                 <div style={{ padding: "4px 18px 18px", borderTop: "1px solid var(--hairline)", display: "flex", flexDirection: "column", gap: 10 }}>
+                    {shareUrl && (
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                            <button
+                                onClick={handleCopyShare}
+                                style={{
+                                    display: "flex", alignItems: "center", gap: 5,
+                                    padding: "5px 11px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer",
+                                    background: copied ? "rgba(48,209,88,0.15)" : "var(--blue)",
+                                    border: `1px solid ${copied ? "rgba(48,209,88,0.30)" : "transparent"}`,
+                                    color: copied ? "var(--green)" : "#fff",
+                                }}
+                            >
+                                {copied ? <Check style={{ width: 12, height: 12 }} /> : <Link2 style={{ width: 12, height: 12 }} />}
+                                {copied ? "Link Copied" : "Copy Share Link"}
+                            </button>
+                        </div>
+                    )}
                     {thread.thread.map((msg: ThreadMsg, i: number) => {
                         const inbound = msg.direction === "in";
                         const isHtmlDoc = !!msg.bodyHtml && isFullHtmlDocument(msg.bodyHtml);

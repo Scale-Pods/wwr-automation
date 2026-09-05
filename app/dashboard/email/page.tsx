@@ -10,6 +10,8 @@ import { useData } from "@/context/DataContext";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { coerceTimestamp, isReplyTrackPositive } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
+import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
+import { matchesBoard, type EmailBoardKey } from "@/lib/email-board";
 
 function MetricTile({ title, subtitle, value, accentColor, icon, onClick }: {
     title: string; subtitle?: string; value: string | number;
@@ -64,6 +66,7 @@ export default function EmailDashboardPage() {
     const [dateSubtitle, setDateSubtitle] = useState("Last 7 days");
     const { leads: allLeads, loadingLeads } = useData();
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const [board, setBoard] = useState<EmailBoardKey>("all");
 
     const data = useMemo(() => {
         const empty = { totalEmails: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, perStep: [0, 0, 0, 0, 0] };
@@ -79,6 +82,7 @@ export default function EmailDashboardPage() {
         const perStep = [0, 0, 0, 0, 0];
 
         (allLeads as OutreachLead[]).forEach(lead => {
+            if (!matchesBoard(lead, board)) return;
             lead.email_slots.forEach(s => {
                 // email_slots only contains slots where email_N itself has content
                 // (see buildEmailSlots) — s.raw is always present here.
@@ -95,7 +99,7 @@ export default function EmailDashboardPage() {
         });
 
         return { totalEmails, totalReplies: replyCount, totalPosSentiment: posSentiment, totalNegSentiment: negSentiment, perStep };
-    }, [dateRange, allLeads, loadingLeads]);
+    }, [dateRange, allLeads, loadingLeads, board]);
 
     const replyRate = data.totalEmails > 0 ? ((data.totalReplies / data.totalEmails) * 100).toFixed(1) : "0";
 
@@ -108,7 +112,10 @@ export default function EmailDashboardPage() {
                     <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.022em", color: "var(--label-primary)", marginBottom: 4 }}>Email Marketing</h1>
                     <p style={{ fontSize: 14, color: "var(--label-secondary)" }}>Monitor your outreach email sequence</p>
                 </div>
-                <DateRangePicker onUpdate={r => { setDateRange(r.range); setDateSubtitle(r.label ? r.label.toLowerCase() : "selected range"); }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <EmailBoardFilter value={board} onChange={setBoard} />
+                    <DateRangePicker onUpdate={r => { setDateRange(r.range); setDateSubtitle(r.label ? r.label.toLowerCase() : "selected range"); }} />
+                </div>
             </div>
 
             <div className="metric-grid-sm">

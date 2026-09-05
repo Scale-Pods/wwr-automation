@@ -9,6 +9,8 @@ import { useData } from "@/context/DataContext";
 import { subDays } from "date-fns";
 import { coerceTimestamp } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
+import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
+import { boardOf, boardLabel, matchesBoard, type EmailBoardKey } from "@/lib/email-board";
 
 function isBounceStatus(s: any): boolean {
     const v = String(s || "").toLowerCase();
@@ -21,17 +23,19 @@ export default function BouncedEmailsPage() {
 
     const [searchTerm, setSearchTerm] = useState("");
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 30), to: new Date() });
+    const [board, setBoard] = useState<EmailBoardKey>("all");
 
     const bouncedLeads = useMemo(() => {
         if (loadingLeads) return [];
         return (allLeads as OutreachLead[])
+            .filter(lead => matchesBoard(lead, board))
             .map(lead => {
                 const bad = lead.email_slots.find(s => isBounceStatus(s.status));
                 if (!bad) return null;
                 const bounceDate = coerceTimestamp(bad.sent_at) || lead.last_activity || lead.updated_at || lead.created_at || null;
-                return { lead, bounceDate, step: bad.n };
+                return { lead, bounceDate, step: bad.n, board: boardOf(lead) };
             })
-            .filter((x): x is { lead: OutreachLead; bounceDate: string | null; step: number } => !!x)
+            .filter((x): x is NonNullable<typeof x> => !!x)
             .filter(({ bounceDate }) => {
                 if (!dateRange?.from) return true;
                 const d = bounceDate ? new Date(bounceDate) : null;
@@ -41,7 +45,7 @@ export default function BouncedEmailsPage() {
                 return d >= from && d <= to;
             })
             .sort((a, b) => new Date(b.bounceDate || 0).getTime() - new Date(a.bounceDate || 0).getTime());
-    }, [allLeads, loadingLeads, dateRange]);
+    }, [allLeads, loadingLeads, dateRange, board]);
 
     const filtered = bouncedLeads.filter(({ lead }) =>
         lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -57,7 +61,10 @@ export default function BouncedEmailsPage() {
                     <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "var(--ls-heading)", color: "var(--label-primary)" }}>Bounced Emails</h1>
                     <p style={{ fontSize: 13, color: "var(--label-secondary)", marginTop: 2 }}>Leads with a bounced or failed email send</p>
                 </div>
-                <DateRangePicker onUpdate={(range: any) => setDateRange(range.range)} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <EmailBoardFilter value={board} onChange={setBoard} />
+                    <DateRangePicker onUpdate={(range: any) => setDateRange(range.range)} />
+                </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
@@ -80,17 +87,20 @@ export default function BouncedEmailsPage() {
                             <table className="w-full text-left">
                                 <thead style={{ borderBottom: "1px solid var(--hairline)" }}>
                                     <tr style={{ background: "var(--fill-quaternary)" }}>
-                                        {["Name", "Email", "Bounced Step", "Bounce Date", "Status"].map(h => (
+                                        {["Name", "Board", "Email", "Bounced Step", "Bounce Date", "Status"].map(h => (
                                             <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)" }}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filtered.length > 0 ? filtered.map(({ lead, bounceDate, step }, idx) => (
+                                    {filtered.length > 0 ? filtered.map(({ lead, bounceDate, step, board: b }, idx) => (
                                         <tr key={lead.lead_id || idx} style={{ borderBottom: "1px solid var(--hairline)", transition: "background 120ms" }}
                                             onMouseEnter={e => (e.currentTarget.style.background = "var(--fill-quaternary)")}
                                             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                                             <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 600, color: "var(--label-primary)" }}>{lead.name || "N/A"}</td>
+                                            <td style={{ padding: "12px 16px", fontSize: 11 }}>
+                                                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, background: "rgba(10,132,255,0.10)", color: "var(--blue)" }}>{boardLabel(b as EmailBoardKey)}</span>
+                                            </td>
                                             <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--label-secondary)" }}>
                                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                                     <Mail style={{ width: 12, height: 12, color: "var(--label-tertiary)", flexShrink: 0 }} />
@@ -109,7 +119,7 @@ export default function BouncedEmailsPage() {
                                             </td>
                                         </tr>
                                     )) : (
-                                        <tr><td colSpan={5} style={{ padding: "60px 16px", textAlign: "center", fontSize: 13, color: "var(--label-tertiary)" }}>{loading ? "Loading..." : "No bounced emails found."}</td></tr>
+                                        <tr><td colSpan={6} style={{ padding: "60px 16px", textAlign: "center", fontSize: 13, color: "var(--label-tertiary)" }}>{loading ? "Loading..." : "No bounced emails found."}</td></tr>
                                     )}
                                 </tbody>
                             </table>

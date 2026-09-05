@@ -14,6 +14,8 @@ import { useData } from "@/context/DataContext";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { coerceTimestamp } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
+import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
+import { boardOf, matchesBoard, boardLabel, type EmailBoardKey } from "@/lib/email-board";
 
 const ITEMS_PER_PAGE = 7;
 
@@ -136,6 +138,7 @@ export default function SentEmailsPage() {
     const loading = loadingLeads;
     const [searchQuery, setSearchQuery] = useState("");
     const [filters, setFilters] = useState({ sender: "all", type: "all" });
+    const [board, setBoard] = useState<EmailBoardKey>("all");
 
     useEffect(() => {
         if (loadingLeads) return;
@@ -143,6 +146,7 @@ export default function SentEmailsPage() {
 
         (allLeads as OutreachLead[]).forEach((lead, leadIndex) => {
             const replied = lead.email_replied;
+            const leadBoard = boardOf(lead);
 
             lead.email_slots.forEach(slot => {
                 // email_N itself must be present — a _status/_sent_at with no content is not a sent email.
@@ -177,6 +181,8 @@ export default function SentEmailsPage() {
                     id: `${lead.lead_id || `lead-${leadIndex}`}-email-${slot.n}`,
                     recipient: toAddr || lead.name || `Lead ${leadIndex + 1}`,
                     leadName: lead.name || lead.full_name || "",
+                    board: leadBoard,
+                    boardLabel: boardLabel(leadBoard),
                     propertyType: lead.property_type || "",
                     propertyCategory: lead.property_category || "",
                     sender: fromAddr || "",
@@ -205,6 +211,7 @@ export default function SentEmailsPage() {
     };
 
     const filteredEmails = sentEmails.filter(email => {
+        if (board !== "all" && email.board !== board) return false;
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             const haystack = [email.recipient, email.leadName, email.subject, email.propertyType, email.propertyCategory, email.content]
@@ -246,6 +253,7 @@ export default function SentEmailsPage() {
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                     <Filter style={{ width: 13, height: 13, color: "var(--label-tertiary)", marginRight: 2 }} />
+                    <EmailBoardFilter value={board} onChange={v => { setBoard(v); setPage(1); }} />
                     <Select value={filters.sender} onValueChange={val => handleFilterChange("sender", val)}>
                         <SelectTrigger style={{ width: 160, height: 32, fontSize: 12 }}><SelectValue placeholder="Sender" /></SelectTrigger>
                         <SelectContent>
@@ -261,7 +269,7 @@ export default function SentEmailsPage() {
                         </SelectContent>
                     </Select>
                     <button style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "var(--label-secondary)", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", padding: "5px 12px", borderRadius: "var(--radius-sm)", cursor: "pointer", height: 32 }}
-                        onClick={() => { setSearchQuery(""); setDateRange(undefined); setFilters({ sender: "all", type: "all" }); setPage(1); }}>
+                        onClick={() => { setSearchQuery(""); setDateRange(undefined); setFilters({ sender: "all", type: "all" }); setBoard("all"); setPage(1); }}>
                         Reset Filters
                     </button>
                 </div>
@@ -316,6 +324,12 @@ function SentEmailCard({ email }: { email: any }) {
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                                     <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", background: "var(--fill-tertiary)", color: "var(--label-secondary)" }}>{email.type}</span>
+                                    {email.boardLabel && email.board !== "leads" && (
+                                        <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, background: "rgba(10,132,255,0.12)", color: "var(--blue)", border: "1px solid rgba(10,132,255,0.25)" }}>{email.boardLabel}</span>
+                                    )}
+                                    {email.board === "leads" && (
+                                        <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, background: "rgba(48,209,88,0.12)", color: "var(--green)", border: "1px solid rgba(48,209,88,0.25)" }}>Leads</span>
+                                    )}
                                     {email.propertyType && (
                                         <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "rgba(175,82,222,0.12)", color: "var(--purple)", border: "1px solid rgba(175,82,222,0.25)" }}>{email.propertyType}</span>
                                     )}

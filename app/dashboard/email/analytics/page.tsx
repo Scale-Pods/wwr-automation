@@ -25,9 +25,12 @@ import { subDays, format } from "date-fns";
 import { useData } from "@/context/DataContext";
 import { coerceTimestamp, isReplyTrackPositive } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
+import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
+import { matchesBoard, type EmailBoardKey } from "@/lib/email-board";
 
 export default function EmailAnalyticsPage() {
     const { leads: allLeads, loadingLeads } = useData();
+    const [board, setBoard] = useState<EmailBoardKey>("all");
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
         from: subDays(new Date(), 30),
         to: new Date(),
@@ -47,6 +50,7 @@ export default function EmailAnalyticsPage() {
         // email_slots already only contains slots where email_N itself has content
         // (see buildEmailSlots) — no need to re-check status/sent_at here.
         const filtered = (allLeads as OutreachLead[]).filter(lead => {
+            if (!matchesBoard(lead, board)) return false;
             const hasEmail = lead.email_slots.length > 0 || isReplyTrackPositive(lead.email_reply_track);
             if (!hasEmail) return false;
             const dateRef = lead.email_slots.length > 0
@@ -65,7 +69,7 @@ export default function EmailAnalyticsPage() {
         });
 
         return { totalSent: sent, totalReplies: replies, totalPosSentiment: posSentiment, totalNegSentiment: negSentiment, totalLeads: filtered.length };
-    }, [allLeads, loadingLeads, dateRange]);
+    }, [allLeads, loadingLeads, dateRange, board]);
 
     const chartData = useMemo(() => {
         if (loadingLeads) return [];
@@ -75,6 +79,7 @@ export default function EmailAnalyticsPage() {
         const counts: Record<string, { date: string, sent: number, replies: number }> = {};
 
         (allLeads as OutreachLead[]).forEach(lead => {
+            if (!matchesBoard(lead, board)) return;
             // Only leads with at least one real sent email (email_N present) contribute
             // to the "sent" trend — a lead with only reply-track activity has no sent count.
             if (lead.email_slots.length === 0) return;
@@ -99,7 +104,7 @@ export default function EmailAnalyticsPage() {
                 ...item,
                 displayDate: format(new Date(item.date + 'T00:00:00'), 'MMM dd')
             }));
-    }, [allLeads, loadingLeads, dateRange]);
+    }, [allLeads, loadingLeads, dateRange, board]);
 
     const { totalSent, totalReplies, totalPosSentiment, totalNegSentiment, totalLeads } = leadStats;
     const replyRate = totalSent > 0 ? ((totalReplies / totalSent) * 100).toFixed(2) : "0.00";
@@ -114,7 +119,8 @@ export default function EmailAnalyticsPage() {
                     <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: 'var(--ls-heading)', color: 'var(--label-primary)' }}>Email Analytics</h1>
                     <p style={{ fontSize: 13, color: 'var(--label-secondary)', marginTop: 2 }}>Comprehensive campaign and outreach performance</p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <EmailBoardFilter value={board} onChange={setBoard} />
                     <DateRangePicker onUpdate={({ range }) => setDateRange(range)} />
                 </div>
             </div>
