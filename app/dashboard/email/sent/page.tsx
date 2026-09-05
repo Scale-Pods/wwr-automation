@@ -176,6 +176,9 @@ export default function SentEmailsPage() {
                 emails.push({
                     id: `${lead.lead_id || `lead-${leadIndex}`}-email-${slot.n}`,
                     recipient: toAddr || lead.name || `Lead ${leadIndex + 1}`,
+                    leadName: lead.name || lead.full_name || "",
+                    propertyType: lead.property_type || "",
+                    propertyCategory: lead.property_category || "",
                     sender: fromAddr || "",
                     type: `Email ${slot.n}`,
                     typeNum: slot.n,
@@ -204,7 +207,9 @@ export default function SentEmailsPage() {
     const filteredEmails = sentEmails.filter(email => {
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            if (!email.recipient.toLowerCase().includes(q) && !email.subject.toLowerCase().includes(q) && !email.content.toLowerCase().includes(q)) return false;
+            const haystack = [email.recipient, email.leadName, email.subject, email.propertyType, email.propertyCategory, email.content]
+                .map((v: string) => String(v || "").toLowerCase());
+            if (!haystack.some((h: string) => h.includes(q))) return false;
         }
         if (dateRange?.from) {
             const ed = email.rawDate ? new Date(email.rawDate) : null;
@@ -311,6 +316,12 @@ function SentEmailCard({ email }: { email: any }) {
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                                     <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", background: "var(--fill-tertiary)", color: "var(--label-secondary)" }}>{email.type}</span>
+                                    {email.propertyType && (
+                                        <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "rgba(175,82,222,0.12)", color: "var(--purple)", border: "1px solid rgba(175,82,222,0.25)" }}>{email.propertyType}</span>
+                                    )}
+                                    {email.propertyCategory && (
+                                        <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "rgba(255,159,10,0.12)", color: "var(--orange)", border: "1px solid rgba(255,159,10,0.25)" }}>{email.propertyCategory}</span>
+                                    )}
                                     {email.hasReplied && (
                                         <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, background: "rgba(48,209,88,0.12)", color: "var(--green)" }}>
                                             <Reply style={{ width: 10, height: 10 }} /> Replied
@@ -319,7 +330,12 @@ function SentEmailCard({ email }: { email: any }) {
                                     {email.sentDate && <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 10, background: "rgba(10,132,255,0.08)", color: "var(--blue)" }}>{email.sentDate}</span>}
                                     {email.status && <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, background: String(email.status).toUpperCase().includes("SENT") ? "rgba(48,209,88,0.12)" : "rgba(255,69,58,0.10)", color: String(email.status).toUpperCase().includes("SENT") ? "var(--green)" : "var(--red)" }}>{email.status}</span>}
                                 </div>
-                                <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--label-primary)" }}>{email.subject || email.type}</h4>
+                                <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--label-primary)" }}>
+                                    {email.leadName || email.recipient}
+                                    {email.subject && email.subject !== email.type && (
+                                        <span style={{ fontWeight: 500, color: "var(--label-tertiary)" }}> · {email.subject}</span>
+                                    )}
+                                </h4>
                                 {!isOpen && (
                                     <p style={{ fontSize: 12, color: "var(--label-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 400 }}>
                                         {stripHtml(email.content).substring(0, 80)}...
