@@ -11,13 +11,14 @@ export function EmailBoardFilter({
 }: {
     value: EmailBoardKey;
     onChange: (v: EmailBoardKey) => void;
-    width?: number;
+    width?: number | string;
 }) {
+    const fullWidth = width === "100%";
     return (
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <LayoutGrid style={{ width: 13, height: 13, color: "var(--label-tertiary)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, width: fullWidth ? "100%" : undefined }}>
+            <LayoutGrid style={{ width: 13, height: 13, color: "var(--label-tertiary)", flexShrink: 0 }} />
             <Select value={value} onValueChange={v => onChange(v as EmailBoardKey)}>
-                <SelectTrigger style={{ width, height: 36, fontSize: 12 }}>
+                <SelectTrigger style={{ width: fullWidth ? "100%" : width, height: 36, fontSize: 12 }}>
                     <SelectValue placeholder="Board" />
                 </SelectTrigger>
                 <SelectContent>

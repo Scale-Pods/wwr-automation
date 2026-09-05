@@ -4,7 +4,7 @@ import { WorldWideLoader } from "@/components/world-wide-loader";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Mail, ChevronDown, ChevronUp, Reply, Search, ArrowDownLeft, ArrowUpRight, Link2, Check } from "lucide-react";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, subDays } from "date-fns";
@@ -202,8 +202,18 @@ export default function ReceivedEmailsPage() {
         });
     }, [threads, searchQuery, dateRange, sortBy, board]);
 
+    const metrics = useMemo(() => {
+        let pos = 0, neg = 0;
+        filtered.forEach(t => {
+            const s = String(t.sentiment || "").toLowerCase();
+            if (s.includes("positive")) pos++;
+            if (s.includes("negative")) neg++;
+        });
+        return { total: filtered.length, pos, neg };
+    }, [filtered]);
+
     return (
-        <div className="space-y-5 pb-10 max-w-5xl mx-auto relative min-h-[500px]">
+        <div className="pb-10 relative min-h-[500px]" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {loading && <WorldWideLoader />}
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -214,44 +224,60 @@ export default function ReceivedEmailsPage() {
                 <DateRangePicker onUpdate={values => setDateRange(values.range)} />
             </div>
 
-            <div className="liquid-card" style={{ padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                    <h3 style={{ fontSize: 24, fontWeight: 700, color: "var(--label-primary)" }}>{loading ? "..." : filtered.length} conversations</h3>
-                    <p style={{ fontSize: 12, color: "var(--label-secondary)", marginTop: 2 }}>Leads that replied by email</p>
-                </div>
-                <div style={{ padding: 12, borderRadius: "var(--radius-lg)", background: "rgba(48,209,88,0.12)", color: "var(--green)" }}>
-                    <Mail style={{ width: 20, height: 20 }} />
-                </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+                <MetricTile label="Conversations" value={loading ? "…" : metrics.total.toLocaleString()} color="var(--green)" icon={<Mail style={{ width: 15, height: 15 }} />} />
+                <MetricTile label="Positive Sentiment" value={loading ? "…" : metrics.pos.toLocaleString()} color="var(--green)" icon={<ArrowUpRight style={{ width: 15, height: 15 }} />} />
+                <MetricTile label="Negative Sentiment" value={loading ? "…" : metrics.neg.toLocaleString()} color="var(--orange)" icon={<ArrowDownLeft style={{ width: 15, height: 15 }} />} />
             </div>
 
-            <div className="liquid-card" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                    <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+            <div className="email-two-col" style={{ display: "grid", gap: 16, alignItems: "start" }}>
+                <aside className="liquid-card email-filter-rail" style={{ padding: "14px 14px", display: "flex", flexDirection: "column", gap: 12, alignSelf: "start" }}>
+                    <div style={{ position: "relative" }}>
                         <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "var(--label-tertiary)" }} />
-                        <Input placeholder="Search sender or message text..." style={{ paddingLeft: 30, height: 36, background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)", fontSize: 12, borderRadius: "var(--radius-md)" }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                        <Input placeholder="Search sender or message text..." style={{ paddingLeft: 30, height: 36, width: "100%", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)", fontSize: 12, borderRadius: "var(--radius-md)" }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
-                    <EmailBoardFilter value={board} onChange={setBoard} />
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                        <SelectTrigger style={{ width: 140, height: 36, fontSize: 12 }}><SelectValue placeholder="Sort By" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="newest">Newest First</SelectItem>
-                            <SelectItem value="oldest">Oldest First</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <button style={{ fontSize: 11, fontWeight: 600, color: "var(--label-secondary)", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", padding: "5px 12px", borderRadius: "var(--radius-sm)", cursor: "pointer", height: 36 }} onClick={() => { setSearchQuery(""); setSortBy("newest"); setBoard("all"); }}>
+                    <div>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)", marginBottom: 5 }}>Board</label>
+                        <EmailBoardFilter value={board} onChange={setBoard} width="100%" />
+                    </div>
+                    <div>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)", marginBottom: 5 }}>Sort</label>
+                        <Select value={sortBy} onValueChange={setSortBy}>
+                            <SelectTrigger style={{ width: "100%", height: 36, fontSize: 12 }}><SelectValue placeholder="Sort By" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="newest">Newest First</SelectItem>
+                                <SelectItem value="oldest">Oldest First</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <button style={{ fontSize: 11, fontWeight: 600, color: "var(--label-secondary)", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", padding: "7px 12px", borderRadius: "var(--radius-sm)", cursor: "pointer", height: 34 }} onClick={() => { setSearchQuery(""); setSortBy("newest"); setBoard("all"); }}>
                         Reset
                     </button>
+                </aside>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+                    {!loading && filtered.map(t => <EmailThreadCard key={t.id} thread={t} />)}
+                    {!loading && filtered.length === 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, color: "var(--label-tertiary)", border: "1px dashed var(--hairline)", borderRadius: "var(--radius-xl)" }}>
+                            <Mail style={{ width: 28, height: 28, marginBottom: 8, opacity: 0.4 }} />
+                            <p style={{ fontSize: 13 }}>No email conversations found.</p>
+                        </div>
+                    )}
                 </div>
             </div>
+        </div>
+    );
+}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {!loading && filtered.map(t => <EmailThreadCard key={t.id} thread={t} />)}
-                {!loading && filtered.length === 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, color: "var(--label-tertiary)", border: "1px dashed var(--hairline)", borderRadius: "var(--radius-xl)" }}>
-                        <Mail style={{ width: 28, height: 28, marginBottom: 8, opacity: 0.4 }} />
-                        <p style={{ fontSize: 13 }}>No email conversations found.</p>
-                    </div>
-                )}
+function MetricTile({ label, value, color, icon }: { label: string; value: string; color: string; icon: ReactNode }) {
+    return (
+        <div className="liquid-card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)" }}>{label}</p>
+                <p style={{ fontSize: 22, fontWeight: 700, color: "var(--label-primary)", letterSpacing: "var(--ls-metric)", marginTop: 2 }}>{value}</p>
+            </div>
+            <div style={{ flexShrink: 0, padding: 9, borderRadius: "var(--radius-md)", background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}>
+                {icon}
             </div>
         </div>
     );

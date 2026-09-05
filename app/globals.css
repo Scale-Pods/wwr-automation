@@ -1161,3 +1161,17 @@
 .email-content table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
 .email-content th,
 .email-content td { padding: 2px 4px; text-align: left; vertical-align: top; border: none !important; background: transparent !important; }
+
+/* Email panel: two-column filter-rail + list layout (Sent / Received pages) */
+.email-two-col {
+    grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1000px) {
+    .email-two-col {
+        grid-template-columns: 264px minmax(0, 1fr);
+    }
+    .email-filter-rail {
+        position: sticky;
+        top: 16px;
+    }
+}

@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     Search, Filter, Mail, ChevronDown, ChevronUp, ArrowRight, ArrowLeft, Reply,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, subDays } from "date-fns";
@@ -183,6 +183,7 @@ export default function SentEmailsPage() {
                     leadName: lead.name || lead.full_name || "",
                     board: leadBoard,
                     boardLabel: boardLabel(leadBoard),
+                    sentiment: lead.email_sentiment || "",
                     propertyType: lead.property_type || "",
                     propertyCategory: lead.property_category || "",
                     sender: fromAddr || "",
@@ -233,75 +234,112 @@ export default function SentEmailsPage() {
     const totalPages = Math.ceil(filteredEmails.length / ITEMS_PER_PAGE);
     const paginatedEmails = filteredEmails.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
+    const metrics = (() => {
+        let pos = 0, neg = 0;
+        for (const e of filteredEmails) {
+            const s = String(e.sentiment || "").toLowerCase();
+            if (s.includes("positive")) pos++;
+            if (s.includes("negative")) neg++;
+        }
+        return { total: filteredEmails.length, pos, neg };
+    })();
+
     return (
-        <div className="space-y-5 pb-10 max-w-5xl mx-auto relative min-h-[500px]">
+        <div className="pb-10 relative min-h-[500px]" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {loading && <WorldWideLoader />}
 
-            <div>
-                <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "var(--ls-heading)", color: "var(--label-primary)" }}>Sent Emails</h1>
-                <p style={{ fontSize: 13, color: "var(--label-secondary)", marginTop: 2 }}>View and manage your sent email history.</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                <div>
+                    <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "var(--ls-heading)", color: "var(--label-primary)" }}>Sent Emails</h1>
+                    <p style={{ fontSize: 13, color: "var(--label-secondary)", marginTop: 2 }}>View and manage your sent email history.</p>
+                </div>
+                <DateRangePicker className="w-full md:w-[260px]" onUpdate={values => setDateRange(values.range)} />
             </div>
 
-            <div className="liquid-card" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                    <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-                        <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "var(--label-tertiary)" }} />
-                        <Input placeholder="Search recipients, subjects..." style={{ paddingLeft: 30, height: 36, background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)", fontSize: 12, borderRadius: "var(--radius-md)" }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                    </div>
-                    <DateRangePicker className="w-full md:w-[260px]" onUpdate={values => setDateRange(values.range)} />
-                </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+                <MetricTile label="Emails Sent" value={loading ? "…" : metrics.total.toLocaleString()} color="var(--blue)" icon={<Mail style={{ width: 15, height: 15 }} />} />
+                <MetricTile label="Positive Sentiment" value={loading ? "…" : metrics.pos.toLocaleString()} color="var(--green)" icon={<Reply style={{ width: 15, height: 15 }} />} />
+                <MetricTile label="Negative Sentiment" value={loading ? "…" : metrics.neg.toLocaleString()} color="var(--orange)" icon={<Filter style={{ width: 15, height: 15 }} />} />
+            </div>
 
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                    <Filter style={{ width: 13, height: 13, color: "var(--label-tertiary)", marginRight: 2 }} />
-                    <EmailBoardFilter value={board} onChange={v => { setBoard(v); setPage(1); }} />
-                    <Select value={filters.sender} onValueChange={val => handleFilterChange("sender", val)}>
-                        <SelectTrigger style={{ width: 160, height: 32, fontSize: 12 }}><SelectValue placeholder="Sender" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Senders</SelectItem>
-                            {uniqueSenders.map(sender => <SelectItem key={sender} value={sender}>{sender}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filters.type} onValueChange={val => handleFilterChange("type", val)}>
-                        <SelectTrigger style={{ width: 140, height: 32, fontSize: 12 }}><SelectValue placeholder="Email Step" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Steps</SelectItem>
-                            {[1, 2, 3, 4, 5].map(n => <SelectItem key={n} value={String(n)}>Email {n}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <button style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, color: "var(--label-secondary)", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", padding: "5px 12px", borderRadius: "var(--radius-sm)", cursor: "pointer", height: 32 }}
+            <div className="email-two-col" style={{ display: "grid", gap: 16, alignItems: "start" }}>
+                <aside className="liquid-card email-filter-rail" style={{ padding: "14px 14px", display: "flex", flexDirection: "column", gap: 12, alignSelf: "start" }}>
+                    <div style={{ position: "relative" }}>
+                        <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "var(--label-tertiary)" }} />
+                        <Input placeholder="Search recipients, subjects..." style={{ paddingLeft: 30, height: 36, width: "100%", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)", fontSize: 12, borderRadius: "var(--radius-md)" }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    </div>
+                    <div>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)", marginBottom: 5 }}>Board</label>
+                        <EmailBoardFilter value={board} onChange={v => { setBoard(v); setPage(1); }} width="100%" />
+                    </div>
+                    <div>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)", marginBottom: 5 }}>Sender</label>
+                        <Select value={filters.sender} onValueChange={val => handleFilterChange("sender", val)}>
+                            <SelectTrigger style={{ width: "100%", height: 36, fontSize: 12 }}><SelectValue placeholder="Sender" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Senders</SelectItem>
+                                {uniqueSenders.map(sender => <SelectItem key={sender} value={sender}>{sender}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)", marginBottom: 5 }}>Email Step</label>
+                        <Select value={filters.type} onValueChange={val => handleFilterChange("type", val)}>
+                            <SelectTrigger style={{ width: "100%", height: 36, fontSize: 12 }}><SelectValue placeholder="Email Step" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Steps</SelectItem>
+                                {[1, 2, 3, 4, 5].map(n => <SelectItem key={n} value={String(n)}>Email {n}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <button style={{ fontSize: 11, fontWeight: 600, color: "var(--label-secondary)", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", padding: "7px 12px", borderRadius: "var(--radius-sm)", cursor: "pointer", height: 34 }}
                         onClick={() => { setSearchQuery(""); setDateRange(undefined); setFilters({ sender: "all", type: "all" }); setBoard("all"); setPage(1); }}>
                         Reset Filters
                     </button>
+                </aside>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+                    {!loading && paginatedEmails.length > 0 ? (
+                        paginatedEmails.map(email => <SentEmailCard key={email.id} email={email} />)
+                    ) : !loading ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, color: "var(--label-tertiary)", border: "1px dashed var(--hairline)", borderRadius: "var(--radius-xl)" }}>
+                            <Mail style={{ width: 28, height: 28, marginBottom: 8, opacity: 0.4 }} />
+                            <p style={{ fontSize: 13 }}>No emails found matching your filters</p>
+                        </div>
+                    ) : null}
+
+                    {!loading && filteredEmails.length > ITEMS_PER_PAGE && (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 12, borderTop: "1px solid var(--hairline)" }}>
+                            <p style={{ fontSize: 12, color: "var(--label-tertiary)" }}>
+                                Showing <span style={{ fontWeight: 700, color: "var(--label-primary)" }}>{(page - 1) * ITEMS_PER_PAGE + 1}</span>–<span style={{ fontWeight: 700, color: "var(--label-primary)" }}>{Math.min(page * ITEMS_PER_PAGE, filteredEmails.length)}</span> of <span style={{ fontWeight: 700, color: "var(--label-primary)" }}>{filteredEmails.length}</span>
+                            </p>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--glass-border)", background: "var(--fill-tertiary)", color: "var(--label-secondary)", fontSize: 12, fontWeight: 500, cursor: "pointer", opacity: page === 1 ? 0.4 : 1 }} onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>
+                                    <ArrowLeft style={{ width: 12, height: 12 }} /> Previous
+                                </button>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--label-secondary)", padding: "0 8px" }}>Page {page} of {totalPages}</span>
+                                <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--glass-border)", background: "var(--fill-tertiary)", color: "var(--label-secondary)", fontSize: 12, fontWeight: 500, cursor: "pointer", opacity: page === totalPages ? 0.4 : 1 }} onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}>
+                                    Next <ArrowRight style={{ width: 12, height: 12 }} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
+        </div>
+    );
+}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {!loading && paginatedEmails.length > 0 ? (
-                    paginatedEmails.map(email => <SentEmailCard key={email.id} email={email} />)
-                ) : !loading ? (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, color: "var(--label-tertiary)", border: "1px dashed var(--hairline)", borderRadius: "var(--radius-xl)" }}>
-                        <Mail style={{ width: 28, height: 28, marginBottom: 8, opacity: 0.4 }} />
-                        <p style={{ fontSize: 13 }}>No emails found matching your filters</p>
-                    </div>
-                ) : null}
+function MetricTile({ label, value, color, icon }: { label: string; value: string; color: string; icon: ReactNode }) {
+    return (
+        <div className="liquid-card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)" }}>{label}</p>
+                <p style={{ fontSize: 22, fontWeight: 700, color: "var(--label-primary)", letterSpacing: "var(--ls-metric)", marginTop: 2 }}>{value}</p>
             </div>
-
-            {!loading && filteredEmails.length > ITEMS_PER_PAGE && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 12, borderTop: "1px solid var(--hairline)" }}>
-                    <p style={{ fontSize: 12, color: "var(--label-tertiary)" }}>
-                        Showing <span style={{ fontWeight: 700, color: "var(--label-primary)" }}>{(page - 1) * ITEMS_PER_PAGE + 1}</span>–<span style={{ fontWeight: 700, color: "var(--label-primary)" }}>{Math.min(page * ITEMS_PER_PAGE, filteredEmails.length)}</span> of <span style={{ fontWeight: 700, color: "var(--label-primary)" }}>{filteredEmails.length}</span>
-                    </p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--glass-border)", background: "var(--fill-tertiary)", color: "var(--label-secondary)", fontSize: 12, fontWeight: 500, cursor: "pointer", opacity: page === 1 ? 0.4 : 1 }} onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>
-                            <ArrowLeft style={{ width: 12, height: 12 }} /> Previous
-                        </button>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--label-secondary)", padding: "0 8px" }}>Page {page} of {totalPages}</span>
-                        <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--glass-border)", background: "var(--fill-tertiary)", color: "var(--label-secondary)", fontSize: 12, fontWeight: 500, cursor: "pointer", opacity: page === totalPages ? 0.4 : 1 }} onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}>
-                            Next <ArrowRight style={{ width: 12, height: 12 }} />
-                        </button>
-                    </div>
-                </div>
-            )}
+            <div style={{ flexShrink: 0, padding: 9, borderRadius: "var(--radius-md)", background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}>
+                {icon}
+            </div>
         </div>
     );
 }
