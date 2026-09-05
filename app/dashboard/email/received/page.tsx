@@ -158,7 +158,7 @@ export default function ReceivedEmailsPage() {
 
             out.push({
                 id: `${lead.lead_id || index}-email-thread`,
-                shareKey: (lead.email && lead.email !== "No Email" ? lead.email : (lead.lead_id || lead.crm_id || "")),
+                shareKey: (lead.crm_id || lead.lead_id || ""),
                 board: bk,
                 boardLabel: boardLabel(bk),
                 sender: lead.email || "No Email Provided",

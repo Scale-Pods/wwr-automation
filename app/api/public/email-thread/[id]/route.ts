@@ -37,14 +37,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
     // Build the candidate query URLs. Using single-column filters (not or=(...))
     // so values containing dots/@ aren't mis-parsed by PostgREST's or() grammar.
+    // Links now carry crm_id; email + lead_id kept as fallbacks for older links.
     const urls: string[] = isEmail
         ? [
             // case-insensitive exact match on email
             `${base}?select=${selectQ}&email=ilike.${encodeURIComponent(rawId)}&order=updated_at.desc&limit=10`,
           ]
         : [
-            `${base}?select=${selectQ}&lead_id=eq.${encodeURIComponent(rawId)}&limit=1`,
             `${base}?select=${selectQ}&crm_id=eq.${encodeURIComponent(rawId)}&limit=1`,
+            `${base}?select=${selectQ}&lead_id=eq.${encodeURIComponent(rawId)}&limit=1`,
           ];
 
     try {
