@@ -4,12 +4,13 @@ import { WorldWideLoader } from "@/components/world-wide-loader";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Mail, ChevronDown, ChevronUp, Reply, Search, ArrowDownLeft, ArrowUpRight } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
-import { coerceTimestamp, parseJsonArray } from "@/lib/outreach-types";
+import { coerceTimestamp, parseJsonArray, isReplyTrackPositive } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 
 type ThreadMsg = {
@@ -22,17 +23,96 @@ type ThreadMsg = {
     date: string | null;
 };
 
+/** Pull the ISO timestamp embedded in a reply-track string, e.g.
+ *  "Yes - email done on 2026-09-05T10:00:00+03:00" or "Yes 2026-08-17T17:00:30.407+03:00". */
+function extractTrackDate(raw: any): string | null {
+    if (!raw) return null;
+    const m = String(raw).match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\s]*/);
+    if (m && !isNaN(new Date(m[0]).getTime())) return m[0];
+    return null;
+}
+
+const INBOUND_MARKERS = ["user", "inbound", "received", "customer", "reply", "incoming"];
+const OUTBOUND_MARKERS = ["assistant", "bot", "agent", "outbound", "sent", "system"];
+
+/** Parse a "qatar_timestamp"-style string: "DD-MM-YYYY HH:MM" or "DD/MM/YYYY HH:MM"
+ *  (also tolerates a trailing comma after the date, e.g. "05/09/2026, 13:59"). */
+function parseQatarTimestamp(raw: any): string | null {
+    if (!raw) return null;
+    const m = String(raw).trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4}),?\s+(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    const [, dd, mm, yyyy, hh, min] = m;
+    // Asia/Qatar is UTC+03:00, fixed offset, no DST.
+    const iso = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}T${hh.padStart(2, "0")}:${min}:00+03:00`;
+    return !isNaN(new Date(iso).getTime()) ? iso : null;
+}
+
+/** Some inbound messages carry their timestamp as a trailing line inside the text
+ *  body itself (e.g. "...\n\nBest regards,\nAbeer\n\n05/09/2026, 13:59") rather than
+ *  as a structured field. Pull it out and strip it from the displayed body. */
+function extractTrailingTimestamp(text: string): { date: string | null; body: string } {
+    const lines = String(text).split("\n");
+    for (let i = lines.length - 1; i >= 0 && i >= lines.length - 3; i--) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const iso = parseQatarTimestamp(line);
+        if (iso) {
+            return { date: iso, body: lines.slice(0, i).join("\n").trim() };
+        }
+        break; // only look at the last non-empty line
+    }
+    return { date: null, body: text };
+}
+
+/** Does this look like a full HTML email (our own template) rather than plain text? */
+function looksLikeHtmlDocument(s: string): boolean {
+    const head = s.trimStart().slice(0, 100).toLowerCase();
+    return head.startsWith("<!doctype") || head.startsWith("<html") || /<\/?(table|div|p|br)\b/i.test(s.slice(0, 300));
+}
+
+/** Some rows store the body with LITERAL backslash-n / backslash-quote escape
+ *  sequences (two characters: "\" + "n") instead of real newlines — undo it so a
+ *  stored HTML document renders with real line breaks instead of visible "\n" text. */
+function unescapeLiteralSequences(s: string): string {
+    if (!/\\[nt"]/.test(s)) return s;
+    return s
+        .replace(/\\r\\n|\\n/g, "\n")
+        .replace(/\\t/g, "\t")
+        .replace(/\\"/g, '"');
+}
+
 /** Normalise one email_conversation entry into a ThreadMsg. */
 function toThreadMsg(m: any): ThreadMsg | null {
     if (!m) return null;
     const roleRaw = String(m.role || m.direction || m.type || "").toLowerCase();
-    const direction: "in" | "out" =
-        roleRaw === "user" || roleRaw === "inbound" || roleRaw === "received" || roleRaw === "customer" || roleRaw === "reply"
-            ? "in"
-            : "out";
-    const bodyHtml = m.body_html || m.html || "";
-    const body = m.body_text || m.body || m.message || m.content || m.text || (bodyHtml ? bodyHtml.replace(/<[^>]+>/g, " ") : "");
+    const direction: "in" | "out" = INBOUND_MARKERS.includes(roleRaw)
+        ? "in"
+        : OUTBOUND_MARKERS.includes(roleRaw)
+            ? "out"
+            // No usable role at all — a message with no role/type in this schema is
+            // the customer's reply (the outbound side always stamps role: assistant).
+            : (roleRaw ? "out" : "in");
+
+    let bodyHtml = m.body_html || m.html || "";
+    let rawText = unescapeLiteralSequences(String(m.body_text || m.body || m.message || m.content || m.text || "").trim());
+
+    // The "message" field sometimes holds a full HTML document rather than plain text.
+    if (!bodyHtml && rawText && looksLikeHtmlDocument(rawText)) {
+        bodyHtml = rawText;
+        rawText = "";
+    }
+
+    // Structured date field first ("date" is ISO); fall back to qatar_timestamp;
+    // fall back to a timestamp embedded as the last line of the plain-text body.
+    let date = coerceTimestamp(m.date || m.timestamp || m.created_at || m.sent_at) || parseQatarTimestamp(m.qatar_timestamp);
+    if (!date && rawText) {
+        const extracted = extractTrailingTimestamp(rawText);
+        if (extracted.date) { date = extracted.date; rawText = extracted.body; }
+    }
+
+    const body = rawText || (bodyHtml ? bodyHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") : "");
     if (!body && !bodyHtml) return null;
+
     return {
         direction,
         from: m.from || m.sender || "",
@@ -40,40 +120,13 @@ function toThreadMsg(m: any): ThreadMsg | null {
         subject: m.subject || "",
         body: String(body).trim(),
         bodyHtml: String(bodyHtml),
-        date: coerceTimestamp(m.timestamp || m.date || m.created_at || m.sent_at) || null,
+        date: date || null,
     };
 }
 
 function buildThread(lead: OutreachLead): ThreadMsg[] {
     const conv = parseJsonArray(lead.email_conversation);
     const msgs = conv.map(toThreadMsg).filter((x): x is ThreadMsg => !!x);
-    // Fall back: synthesise from sent email_slots + a single inbound stub
-    if (msgs.length === 0) {
-        lead.email_slots.forEach(s => {
-            if (s.raw == null && !s.sent_at) return;
-            msgs.push({
-                direction: "out",
-                from: s.obj?.from || "",
-                to: s.obj?.to || lead.email,
-                subject: s.obj?.subject || `Email ${s.n}`,
-                body: (s.obj?.body_text || s.body || "").toString().trim(),
-                bodyHtml: s.obj?.body_html || "",
-                date: coerceTimestamp(s.sent_at) || coerceTimestamp(s.obj?.timestamp) || null,
-            });
-        });
-        const t = typeof lead.email_reply_track === "string" && lead.email_reply_track.trim().toLowerCase() !== "yes"
-            ? lead.email_reply_track.trim()
-            : lead.email_note || "Email reply received";
-        msgs.push({
-            direction: "in",
-            from: lead.email,
-            to: "",
-            subject: "Re:",
-            body: String(t),
-            bodyHtml: "",
-            date: coerceTimestamp(lead.last_activity) || lead.updated_at || null,
-        });
-    }
     // chronological
     msgs.sort((a, b) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
     return msgs;
@@ -92,10 +145,12 @@ export default function ReceivedEmailsPage() {
         const out: any[] = [];
 
         (allLeads as OutreachLead[]).forEach((lead, index) => {
-            if (!lead.email_replied) return;
+            // Gate purely on email_reply_track carrying a value (e.g. "Yes - email done on <ISO>").
+            if (!isReplyTrackPositive(lead.email_reply_track)) return;
             const thread = buildThread(lead);
+            const trackDate = extractTrackDate(lead.email_reply_track);
             const lastInbound = [...thread].reverse().find(m => m.direction === "in");
-            const replyDate = lastInbound?.date || lead.last_activity || lead.updated_at || lead.created_at || new Date().toISOString();
+            const replyDate = trackDate || lastInbound?.date || lead.last_activity || lead.updated_at || lead.created_at || new Date().toISOString();
 
             out.push({
                 id: `${lead.lead_id || index}-email-thread`,
@@ -191,8 +246,96 @@ export default function ReceivedEmailsPage() {
     );
 }
 
+/** Full HTML documents (our own branded email templates) need their own
+ *  document context — <head>/<style>/<html> injected into a plain <div> gets
+ *  mangled by the browser. Render those in a sandboxed, self-sizing iframe. */
+function isFullHtmlDocument(html: string): boolean {
+    const head = html.trimStart().slice(0, 100).toLowerCase();
+    return head.startsWith("<!doctype") || head.startsWith("<html");
+}
+
+const PREVIEW_HEIGHT = 130;
+
+/** Read the rendered content height of a same-document (srcDoc) iframe.
+ *  No sandbox attribute is set, so this stays same-origin and never throws —
+ *  but guard it anyway in case a browser/extension still blocks access. */
+function readFrameHeight(frame: HTMLIFrameElement | null): number | null {
+    try {
+        const doc = frame?.contentWindow?.document;
+        return doc?.body ? doc.body.scrollHeight + 20 : null;
+    } catch {
+        return null;
+    }
+}
+
+/** Small, non-interactive preview strip. Clicking anywhere opens the full
+ *  email in a modal — the preview itself never needs its own scrollbar or
+ *  clickable links, so no sandbox restrictions are needed on it either. */
+function EmailHtmlPreview({ html, onOpen }: { html: string; onOpen: () => void }) {
+    const ref = useRef<HTMLIFrameElement>(null);
+    const [naturalHeight, setNaturalHeight] = useState(500);
+
+    return (
+        <div
+            onClick={onOpen}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") onOpen(); }}
+            style={{ position: "relative", height: PREVIEW_HEIGHT, overflow: "hidden", borderRadius: 8, cursor: "pointer" }}
+        >
+            <iframe
+                ref={ref}
+                srcDoc={html}
+                onLoad={() => { const h = readFrameHeight(ref.current); if (h) setNaturalHeight(Math.min(1400, h)); }}
+                title="Email preview"
+                tabIndex={-1}
+                style={{ width: "100%", height: naturalHeight, border: "none", background: "#fff", display: "block", pointerEvents: "none" }}
+            />
+            <div
+                style={{
+                    position: "absolute", inset: 0,
+                    background: "linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.94) 88%)",
+                }}
+            />
+            <div
+                style={{
+                    position: "absolute", bottom: 6, right: 8,
+                    display: "flex", alignItems: "center", gap: 4,
+                    fontSize: 11, fontWeight: 600, color: "var(--blue)",
+                    background: "var(--bg-layer1)", padding: "2px 8px", borderRadius: 20,
+                    border: "1px solid var(--hairline)",
+                }}
+            >
+                View full email <ChevronDown style={{ width: 11, height: 11 }} />
+            </div>
+        </div>
+    );
+}
+
+/** Full email rendered in a modal, at its natural height. */
+function EmailHtmlModal({ html, open, onOpenChange }: { html: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+    const ref = useRef<HTMLIFrameElement>(null);
+    const [height, setHeight] = useState(600);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+                <DialogHeader className="sr-only"><DialogTitle>Email content</DialogTitle></DialogHeader>
+                <iframe
+                    ref={ref}
+                    srcDoc={html}
+                    onLoad={() => { const h = readFrameHeight(ref.current); if (h) setHeight(Math.min(2000, h)); }}
+                    title="Email content"
+                    style={{ width: "100%", height, border: "none", background: "#fff", display: "block", borderRadius: 8 }}
+                />
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function EmailThreadCard({ thread }: { thread: any }) {
     const [isOpen, setIsOpen] = useState(false);
+    const [openHtmlIndex, setOpenHtmlIndex] = useState<number | null>(null);
 
     const renderBody = (msg: ThreadMsg): string => {
         if (msg.bodyHtml) return msg.bodyHtml;
@@ -234,10 +377,11 @@ function EmailThreadCard({ thread }: { thread: any }) {
                 <div style={{ padding: "4px 18px 18px", borderTop: "1px solid var(--hairline)", display: "flex", flexDirection: "column", gap: 10 }}>
                     {thread.thread.map((msg: ThreadMsg, i: number) => {
                         const inbound = msg.direction === "in";
+                        const isHtmlDoc = !!msg.bodyHtml && isFullHtmlDocument(msg.bodyHtml);
                         return (
                             <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: inbound ? "flex-start" : "flex-end", width: "100%", marginTop: 12 }}>
                                 <div style={{
-                                    maxWidth: "88%", padding: "10px 13px", borderRadius: 12,
+                                    maxWidth: isHtmlDoc ? "100%" : "88%", width: isHtmlDoc ? "100%" : undefined, padding: "10px 13px", borderRadius: 12,
                                     background: inbound ? "rgba(48,209,88,0.09)" : "var(--fill-quaternary)",
                                     border: `1px solid ${inbound ? "rgba(48,209,88,0.20)" : "var(--hairline)"}`,
                                     borderTopLeftRadius: inbound ? 3 : 12,
@@ -252,7 +396,18 @@ function EmailThreadCard({ thread }: { thread: any }) {
                                         {msg.date && <span style={{ fontSize: 10, color: "var(--label-tertiary)" }}>· {(() => { try { return format(new Date(msg.date), "MMM dd, p"); } catch { return ""; } })()}</span>}
                                     </div>
                                     {msg.subject && <p style={{ fontSize: 12, fontWeight: 600, color: "var(--label-primary)", margin: "0 0 6px" }}>{msg.subject}</p>}
-                                    <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--label-primary)" }} className="email-content" dangerouslySetInnerHTML={{ __html: renderBody(msg) }} />
+                                    {msg.bodyHtml && isFullHtmlDocument(msg.bodyHtml) ? (
+                                        <>
+                                            <EmailHtmlPreview html={msg.bodyHtml} onOpen={() => setOpenHtmlIndex(i)} />
+                                            <EmailHtmlModal
+                                                html={msg.bodyHtml}
+                                                open={openHtmlIndex === i}
+                                                onOpenChange={v => setOpenHtmlIndex(v ? i : null)}
+                                            />
+                                        </>
+                                    ) : (
+                                        <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--label-primary)" }} className="email-content" dangerouslySetInnerHTML={{ __html: renderBody(msg) }} />
+                                    )}
                                 </div>
                             </div>
                         );

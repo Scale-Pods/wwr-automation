@@ -49,17 +49,10 @@ export async function GET(req: Request) {
         'Cache-Control': 'no-store',
     };
 
-    const cols = [
-        'lead_id', 'crm_id', 'full_name', 'first_name', 'last_name', 'email', 'phone',
-        'wa_1', 'wa_1_status', 'wa_1_sent_at',
-        'wa_2', 'wa_2_status', 'wa_2_sent_at',
-        'wa_3', 'wa_3_status', 'wa_3_sent_at',
-        'wa_4', 'wa_4_status', 'wa_4_sent_at',
-        'wa_sentiment', 'wa_note', 'last_whatsapp_message',
-        'whatsapp_conversation', 'whatsapp_reply_track',
-        'lead_status', 'lead_stage', 'workflow_name', 'workflow_status',
-        'created_at', 'updated_at', 'last_activity',
-    ].join(',');
+    // '*' — hardcoding a column list drifts from the live schema (e.g. wa_4 not
+    // existing on this instance) and throws 42703. Pulling every column is safe here
+    // since only a handful of fields are read downstream.
+    const cols = '*';
 
     try {
         // A lead "has WhatsApp activity" if wa_1 is set OR the conversation jsonb is non-empty.

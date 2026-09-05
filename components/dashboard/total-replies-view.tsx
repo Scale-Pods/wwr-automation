@@ -21,6 +21,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, Search, Mail, MessageCircle, Phone } from "lucide-react";
+import { isReplyTrackPositive, parseJsonArray, coerceTimestamp } from "@/lib/outreach-types";
 
 interface ReplyData {
     id: string;
@@ -42,96 +43,91 @@ export function TotalRepliesView({ leads = [], dateRange, onViewLead }: { leads?
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 5;
 
-    const parseMsg = (raw: any): { date: Date | null, content: string } => {
-        if (!raw || !String(raw).trim()) return { date: null, content: "" };
-        const content = String(raw).trim();
-        const isoRegex = /\n\n(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.+)$/;
-        const isoMatch = content.match(isoRegex);
-        if (isoMatch) {
-            return {
-                date: new Date(isoMatch[1]),
-                content: content.replace(isoRegex, '').trim()
-            };
+    // Extract an ISO date embedded in a reply-track string, e.g.
+    // "Yes - email done on 2026-09-05T10:00:00+03:00" or "Yes 2026-08-17T17:00:30.407+03:00".
+    const parseTrackDate = (raw: any): Date | null => {
+        if (!raw) return null;
+        const s = String(raw);
+        const m = s.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\s]*/);
+        if (m) { const d = new Date(m[0]); if (!isNaN(d.getTime())) return d; }
+        return null;
+    };
+
+    // Last inbound message content from a conversation JSON array (WhatsApp/email shape).
+    const lastInboundContent = (conv: any[], inboundRoles: string[]): string => {
+        for (let i = conv.length - 1; i >= 0; i--) {
+            const m = conv[i];
+            const role = String(m?.role || m?.direction || m?.type || m?.sender || "").toLowerCase();
+            if (inboundRoles.includes(role)) {
+                return String(m.message || m.content || m.text || m.body_text || m.body || "").trim();
+            }
         }
-        const lines = content.split('\n');
-        const lastLine = lines[lines.length - 1].trim();
-        const lastLineDate = new Date(lastLine.replace(' ', 'T'));
-        if (lines.length > 1 && !isNaN(lastLineDate.getTime()) && lastLine.includes('-') && lastLine.includes(':')) {
-            return {
-                date: lastLineDate,
-                content: lines.slice(0, -1).join('\n').trim()
-            };
-        }
-        return { date: null, content: content };
+        return "";
     };
 
     // Map real leads to ReplyData format
     const realData: (ReplyData & { link: string; sortDate: Date })[] = [];
 
     leads.forEach((lead: any, idx: number) => {
-        // --- WhatsApp Logic ---
-        let wpReplyObj = { content: "Lead replied via WhatsApp", date: new Date(lead.updated_at || lead.created_at || 0) };
-        let hasWP = false;
+        const fallbackDate = new Date(lead.updated_at || lead.created_at || 0);
 
-        // WP_Replied_track: any non-empty, non-"no" value counts as replied
-        const wtR = String(lead.WP_Replied_track || "").trim().toLowerCase();
-        if (wtR && wtR !== "no" && wtR !== "none") {
-            hasWP = true;
-            const parsed = parseMsg(lead.WP_Replied_track);
-            if (parsed.date) wpReplyObj = { content: parsed.content || wpReplyObj.content, date: parsed.date };
-        }
-
-        const addWpReply = (raw: any) => {
-            if (!raw) return;
-            const s = String(raw).trim().toLowerCase();
-            if (!s || s === "no" || s === "none") return;
-            hasWP = true;
-            const parsed = parseMsg(raw);
-            const msgDate = parsed.date || new Date(lead.updated_at || lead.created_at || 0);
-            if (msgDate >= wpReplyObj.date) {
-                wpReplyObj = { content: parsed.content || wpReplyObj.content, date: msgDate };
-            }
-        };
-
-        addWpReply(lead.whatsapp_replied);
-        for (let i = 1; i <= 10; i++) addWpReply(lead[`W.P_Replied_${i}`]);
+        // --- WhatsApp Logic --- (source of truth: whatsapp_reply_track, e.g. "Yes ...on <ISO>")
+        const waTrack = lead.whatsapp_reply_track;
+        const hasWP = isReplyTrackPositive(waTrack) || !!lead.whatsapp_replied;
 
         if (hasWP) {
-            const leadId = lead["Lead ID"] || lead.id || `lead-${idx}`;
+            const waConv = parseJsonArray(lead.whatsapp_conversation);
+            const trackDate = parseTrackDate(waTrack);
+            const wpDate = trackDate
+                || (coerceTimestamp(lead.last_activity) ? new Date(coerceTimestamp(lead.last_activity)!) : null)
+                || fallbackDate;
+            const wpContent = lastInboundContent(waConv, ["user", "customer", "inbound", "received"])
+                || lead.last_whatsapp_message
+                || "Lead replied via WhatsApp";
+
+            const leadId = lead.lead_id || lead.id || lead.crm_id || `lead-${idx}`;
             realData.push({
                 id: `${leadId}-wp`,
-                contactName: lead.name || lead["Name"] || "Unknown",
-                contactInfo: lead.phone || lead["Phone"] || "No info",
+                contactName: lead.full_name || lead.name || "Unknown",
+                contactInfo: lead.phone || "No info",
                 mode: 'WhatsApp',
-                date: wpReplyObj.date.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }),
-                time: wpReplyObj.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                date: wpDate.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }),
+                time: wpDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 status: 'Replied',
-                preview: wpReplyObj.content.substring(0, 70) + (wpReplyObj.content.length > 70 ? "..." : ""),
+                preview: wpContent.substring(0, 70) + (wpContent.length > 70 ? "..." : ""),
                 link: `/dashboard/whatsapp/chat?chat=${leadId}`,
                 rawLead: lead,
-                sortDate: wpReplyObj.date
+                sortDate: wpDate
             });
         }
 
-        // --- Email Logic ---
-        const hasEmail = lead.email_replied && !["no", "none", ""].includes(String(lead.email_replied).toLowerCase().trim());
+        // --- Email Logic --- (source of truth: email_reply_track, e.g. "Yes - email done on <ISO>")
+        const emailTrack = lead.email_reply_track;
+        const hasEmail = isReplyTrackPositive(emailTrack) || !!lead.email_replied;
 
         if (hasEmail) {
-            const parsed = parseMsg(lead.email_replied);
-            const msgDate = parsed.date || new Date(lead.updated_at || lead.created_at || 0);
-            const emailReplyObj = { content: parsed.content || "Lead replied via Email", date: msgDate };
+            const emailConv = parseJsonArray(lead.email_conversation);
+            const trackDate = parseTrackDate(emailTrack);
+            const emailDate = trackDate
+                || (coerceTimestamp(lead.last_activity) ? new Date(coerceTimestamp(lead.last_activity)!) : null)
+                || fallbackDate;
+            const emailContent = lastInboundContent(emailConv, ["user", "inbound", "received", "reply", "customer"])
+                || lead.email_note
+                || "Lead replied via Email";
 
+            const leadId = lead.lead_id || lead.id || lead.crm_id || `lead-${idx}`;
             realData.push({
-                id: `${lead.id || `lead-${idx}`}-email`,
-                contactName: lead.name || "Unknown",
+                id: `${leadId}-email`,
+                contactName: lead.full_name || lead.name || "Unknown",
                 contactInfo: lead.email || "No info",
                 mode: 'Email',
-                date: emailReplyObj.date.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }),
-                time: emailReplyObj.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                date: emailDate.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }),
+                time: emailDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 status: 'Replied',
-                preview: emailReplyObj.content.substring(0, 70) + (emailReplyObj.content.length > 70 ? "..." : ""),
+                preview: emailContent.substring(0, 70) + (emailContent.length > 70 ? "..." : ""),
                 link: `/dashboard/email/received`,
-                sortDate: emailReplyObj.date
+                rawLead: lead,
+                sortDate: emailDate
             });
         }
     });

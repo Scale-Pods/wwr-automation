@@ -56,12 +56,10 @@ export async function GET(req: Request) {
         'Cache-Control': 'no-store',
     };
 
-    const cols = encodeURIComponent([
-        'created_at',
-        'wa_1', 'wa_1_sent_at', 'wa_2', 'wa_2_sent_at', 'wa_3', 'wa_3_sent_at', 'wa_4', 'wa_4_sent_at',
-        'wa_1_status', 'wa_2_status', 'wa_3_status', 'wa_4_status',
-        'whatsapp_reply_track', 'whatsapp_conversation', 'last_activity',
-    ].join(','));
+    // select=* — hardcoding a column list drifts from the live schema (e.g. wa_4 not
+    // existing on this instance) and throws 42703. Pulling every column is safe here
+    // since only a handful of fields are read below.
+    const cols = '*';
 
     // Only leads that got at least a first WhatsApp message, within range.
     const filter =

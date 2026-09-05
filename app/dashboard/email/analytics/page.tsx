@@ -5,6 +5,7 @@ import {
     Send,
     TrendingUp,
     AlertTriangle,
+    CheckCircle2,
     Users
 } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -22,7 +23,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { subDays, format } from "date-fns";
 import { useData } from "@/context/DataContext";
-import { coerceTimestamp } from "@/lib/outreach-types";
+import { coerceTimestamp, isReplyTrackPositive } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 
 export default function EmailAnalyticsPage() {
@@ -33,7 +34,7 @@ export default function EmailAnalyticsPage() {
     });
 
     const leadStats = useMemo(() => {
-        if (loadingLeads) return { totalSent: 0, totalReplies: 0, totalNegSentiment: 0, totalLeads: 0 };
+        if (loadingLeads) return { totalSent: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, totalLeads: 0 };
         const start = dateRange?.from;
         const end = dateRange?.to;
         const inRange = (d: Date | null) => {
@@ -43,21 +44,27 @@ export default function EmailAnalyticsPage() {
             return true;
         };
 
+        // email_slots already only contains slots where email_N itself has content
+        // (see buildEmailSlots) — no need to re-check status/sent_at here.
         const filtered = (allLeads as OutreachLead[]).filter(lead => {
-            const hasEmail = lead.email_slots.some(s => s.raw != null || s.sent_at || s.status) || lead.email_replied;
+            const hasEmail = lead.email_slots.length > 0 || isReplyTrackPositive(lead.email_reply_track);
             if (!hasEmail) return false;
-            const dateRef = coerceTimestamp(lead.email_slots[0]?.sent_at) || lead.created_at || lead.last_activity || lead.updated_at;
+            const dateRef = lead.email_slots.length > 0
+                ? (coerceTimestamp(lead.email_slots[0]?.sent_at) || lead.created_at)
+                : (lead.last_activity || lead.updated_at || lead.created_at);
             return inRange(dateRef ? new Date(dateRef) : null);
         });
 
-        let sent = 0, replies = 0, negSentiment = 0;
+        let sent = 0, replies = 0, posSentiment = 0, negSentiment = 0;
         filtered.forEach(lead => {
-            lead.email_slots.forEach(s => { if (s.raw != null || s.sent_at || s.status) sent++; });
-            if (lead.email_replied) replies++;
-            if (String(lead.email_sentiment || "").toLowerCase().includes("negative")) negSentiment++;
+            sent += lead.email_slots.length;
+            if (isReplyTrackPositive(lead.email_reply_track)) replies++;
+            const sentiment = String(lead.email_sentiment || "").toLowerCase();
+            if (sentiment.includes("positive")) posSentiment++;
+            if (sentiment.includes("negative")) negSentiment++;
         });
 
-        return { totalSent: sent, totalReplies: replies, totalNegSentiment: negSentiment, totalLeads: filtered.length };
+        return { totalSent: sent, totalReplies: replies, totalPosSentiment: posSentiment, totalNegSentiment: negSentiment, totalLeads: filtered.length };
     }, [allLeads, loadingLeads, dateRange]);
 
     const chartData = useMemo(() => {
@@ -68,16 +75,18 @@ export default function EmailAnalyticsPage() {
         const counts: Record<string, { date: string, sent: number, replies: number }> = {};
 
         (allLeads as OutreachLead[]).forEach(lead => {
-            const dateRef = coerceTimestamp(lead.email_slots[0]?.sent_at) || lead.created_at || lead.last_activity || lead.updated_at;
+            // Only leads with at least one real sent email (email_N present) contribute
+            // to the "sent" trend — a lead with only reply-track activity has no sent count.
+            if (lead.email_slots.length === 0) return;
+            const dateRef = coerceTimestamp(lead.email_slots[0]?.sent_at) || lead.created_at;
             if (!dateRef) return;
             const d = new Date(dateRef);
             if (start && d < start) return;
             if (end) { const toDate = new Date(end); toDate.setHours(23, 59, 59, 999); if (d > toDate) return; }
             const dateKey = d.toISOString().split("T")[0];
 
-            let sent = 0;
-            lead.email_slots.forEach(s => { if (s.raw != null || s.sent_at || s.status) sent++; });
-            const isReplied = lead.email_replied;
+            const sent = lead.email_slots.length;
+            const isReplied = isReplyTrackPositive(lead.email_reply_track);
 
             if (!counts[dateKey]) counts[dateKey] = { date: dateKey, sent: 0, replies: 0 };
             counts[dateKey].sent += sent;
@@ -92,7 +101,7 @@ export default function EmailAnalyticsPage() {
             }));
     }, [allLeads, loadingLeads, dateRange]);
 
-    const { totalSent, totalReplies, totalNegSentiment, totalLeads } = leadStats;
+    const { totalSent, totalReplies, totalPosSentiment, totalNegSentiment, totalLeads } = leadStats;
     const replyRate = totalSent > 0 ? ((totalReplies / totalSent) * 100).toFixed(2) : "0.00";
 
     return (
@@ -113,9 +122,10 @@ export default function EmailAnalyticsPage() {
             {/* Campaign Performance */}
             <div>
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--label-primary)', marginBottom: 10 }}>Campaign Performance</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <MetricCard label="Total Sent" value={totalSent.toLocaleString()} icon={Send} color="var(--blue)" />
                     <MetricCard label="Replies" value={totalReplies.toLocaleString()} subtext={`${replyRate}% Rate`} icon={TrendingUp} color="var(--blue)" />
+                    <MetricCard label="Positive Sentiment" value={totalPosSentiment.toLocaleString()} icon={CheckCircle2} color="var(--green)" />
                     <MetricCard label="Negative Sentiment" value={totalNegSentiment.toLocaleString()} icon={AlertTriangle} color="var(--orange)" />
                     <MetricCard label="Leads Emailed" value={totalLeads.toLocaleString()} icon={Users} color="var(--label-secondary)" />
                 </div>

@@ -5,8 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     Search, Filter, Mail, ChevronDown, ChevronUp, ArrowRight, ArrowLeft, Reply,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
@@ -15,6 +16,117 @@ import { coerceTimestamp } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 
 const ITEMS_PER_PAGE = 7;
+
+/** Clean up a raw (non-JSON) email body: drop a leading "Template:" label and a
+ *  trailing embedded timestamp like "05-09-2026 13:49" that automation tools
+ *  sometimes append after the signature. */
+function cleanPlainBody(raw: string): string {
+    let s = String(raw || "").trim();
+    s = s.replace(/^\s*template\s*:\s*/i, "");
+    s = s.replace(/\s+\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}\s*$/i, "");
+    return s.trim();
+}
+
+/** Some rows store the body with LITERAL backslash-n / backslash-t / backslash-quote
+ *  escape sequences (two characters: "\" + "n") instead of real newlines — a
+ *  serialization artifact from however the value was originally written. Undo it
+ *  so a stored HTML document is recognisable as HTML rather than escaped text. */
+function unescapeLiteralSequences(s: string): string {
+    if (!/\\[nt"]/.test(s)) return s;
+    return s
+        .replace(/\\r\\n|\\n/g, "\n")
+        .replace(/\\t/g, "\t")
+        .replace(/\\"/g, '"');
+}
+
+/** Escape a plain-text body and convert linebreaks/URLs, mirroring the
+ *  received-page renderer so plain-text and HTML bodies look consistent. */
+function textToHtml(text: string): string {
+    const escaped = String(text)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: var(--blue); text-decoration: underline;">$1</a>')
+        .replace(/\n\n/g, "</p><p style='margin:0 0 10px'>")
+        .replace(/\n/g, "<br/>");
+    return `<p style="margin:0 0 10px">${escaped}</p>`;
+}
+
+/** Is this a full HTML document (our own branded email template) rather than
+ *  a plain fragment? <head>/<style>/<html> injected into a plain <div> gets
+ *  mangled by the browser, so these need their own document context. */
+function isFullHtmlDocument(html: string): boolean {
+    const head = html.trimStart().slice(0, 100).toLowerCase();
+    return head.startsWith("<!doctype") || head.startsWith("<html");
+}
+
+function readFrameHeight(frame: HTMLIFrameElement | null): number | null {
+    try {
+        const doc = frame?.contentWindow?.document;
+        return doc?.body ? doc.body.scrollHeight + 20 : null;
+    } catch {
+        return null;
+    }
+}
+
+const PREVIEW_HEIGHT = 130;
+
+/** Clipped, non-interactive preview strip. Clicking anywhere opens the full
+ *  email in a modal. */
+function EmailHtmlPreview({ html, onOpen }: { html: string; onOpen: () => void }) {
+    const ref = useRef<HTMLIFrameElement>(null);
+    const [naturalHeight, setNaturalHeight] = useState(500);
+
+    return (
+        <div
+            onClick={onOpen}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") onOpen(); }}
+            style={{ position: "relative", height: PREVIEW_HEIGHT, overflow: "hidden", borderRadius: 8, cursor: "pointer" }}
+        >
+            <iframe
+                ref={ref}
+                srcDoc={html}
+                onLoad={() => { const h = readFrameHeight(ref.current); if (h) setNaturalHeight(Math.min(1400, h)); }}
+                title="Email preview"
+                tabIndex={-1}
+                style={{ width: "100%", height: naturalHeight, border: "none", background: "#fff", display: "block", pointerEvents: "none" }}
+            />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.94) 88%)" }} />
+            <div
+                style={{
+                    position: "absolute", bottom: 6, right: 8,
+                    display: "flex", alignItems: "center", gap: 4,
+                    fontSize: 11, fontWeight: 600, color: "var(--blue)",
+                    background: "var(--bg-layer1)", padding: "2px 8px", borderRadius: 20,
+                    border: "1px solid var(--hairline)",
+                }}
+            >
+                View full email <ChevronDown style={{ width: 11, height: 11 }} />
+            </div>
+        </div>
+    );
+}
+
+/** Full email rendered in a modal, at its natural height. */
+function EmailHtmlModal({ html, open, onOpenChange }: { html: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+    const ref = useRef<HTMLIFrameElement>(null);
+    const [height, setHeight] = useState(600);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+                <DialogHeader className="sr-only"><DialogTitle>Email content</DialogTitle></DialogHeader>
+                <iframe
+                    ref={ref}
+                    srcDoc={html}
+                    onLoad={() => { const h = readFrameHeight(ref.current); if (h) setHeight(Math.min(2000, h)); }}
+                    title="Email content"
+                    style={{ width: "100%", height, border: "none", background: "#fff", display: "block", borderRadius: 8 }}
+                />
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function SentEmailsPage() {
     const { leads: allLeads, loadingLeads } = useData();
@@ -33,14 +145,30 @@ export default function SentEmailsPage() {
             const replied = lead.email_replied;
 
             lead.email_slots.forEach(slot => {
-                if (slot.raw == null && !slot.sent_at && !slot.status) return;
+                // email_N itself must be present — a _status/_sent_at with no content is not a sent email.
+                if (slot.raw == null) return;
                 const obj = slot.obj;
                 const rawDate = coerceTimestamp(slot.sent_at) || coerceTimestamp(obj?.timestamp) || lead.created_at || null;
 
                 let subject = obj?.subject || `Email ${slot.n}`;
-                let fromAddr = obj?.from || "";
+                let fromAddr = obj?.from || lead.owner_email || lead.owner_name || "";
                 let toAddr = obj?.to || lead.email || "";
-                const emailBody = obj?.body_html || obj?.body_text || slot.body || "Email sent – no content stored.";
+
+                // Undo literal \n / \" escaping before deciding what kind of content this is —
+                // a stored HTML document reads as escaped text otherwise and gets mis-detected.
+                const rawUnescaped = unescapeLiteralSequences(String(slot.body || ""));
+                const objBodyHtml = obj?.body_html ? unescapeLiteralSequences(String(obj.body_html)) : "";
+                const objBodyText = obj?.body_text ? unescapeLiteralSequences(String(obj.body_text)) : "";
+
+                let emailBody: string;
+                if (objBodyHtml) {
+                    emailBody = objBodyHtml;
+                } else if (isFullHtmlDocument(rawUnescaped)) {
+                    emailBody = rawUnescaped;
+                } else {
+                    const plainBody = objBodyText || (rawUnescaped ? cleanPlainBody(rawUnescaped) : "");
+                    emailBody = plainBody ? textToHtml(plainBody) : "Email sent – no content stored.";
+                }
 
                 let sentDate: string | null = null;
                 if (rawDate) { try { sentDate = format(new Date(rawDate), "MMM dd, yyyy • p"); } catch { } }
@@ -48,7 +176,7 @@ export default function SentEmailsPage() {
                 emails.push({
                     id: `${lead.lead_id || `lead-${leadIndex}`}-email-${slot.n}`,
                     recipient: toAddr || lead.name || `Lead ${leadIndex + 1}`,
-                    sender: fromAddr || "Unknown Sender",
+                    sender: fromAddr || "",
                     type: `Email ${slot.n}`,
                     typeNum: slot.n,
                     sentDate,
@@ -66,7 +194,7 @@ export default function SentEmailsPage() {
         setSentEmails(emails);
     }, [allLeads, loadingLeads]);
 
-    const uniqueSenders = Array.from(new Set(sentEmails.map(e => e.sender))).sort();
+    const uniqueSenders = Array.from(new Set(sentEmails.map(e => e.sender).filter(Boolean))).sort();
 
     const handleFilterChange = (key: string, value: string) => {
         setFilters(prev => ({ ...prev, [key]: value }));
@@ -167,7 +295,9 @@ export default function SentEmailsPage() {
 
 function SentEmailCard({ email }: { email: any }) {
     const [isOpen, setIsOpen] = useState(false);
-    const stripHtml = (html: string) => !html ? "" : html.replace(/<(br|p|div|li|h[1-6])[^>]*>/gi, " ").replace(/<\/?[^>]+(>|$)/g, "");
+    const [htmlModalOpen, setHtmlModalOpen] = useState(false);
+    const isHtmlDoc = isFullHtmlDocument(email.content);
+    const stripHtml = (html: string) => !html ? "" : html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<(br|p|div|li|h[1-6])[^>]*>/gi, " ").replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
 
     return (
         <Collapsible open={isOpen} onOpenChange={setIsOpen} className="liquid-card" style={{ padding: 0, overflow: "hidden", transition: "all 150ms" }}>
@@ -209,9 +339,16 @@ function SentEmailCard({ email }: { email: any }) {
                         {email.sender && <p style={{ fontSize: 11, color: "var(--label-tertiary)" }}><span style={{ fontWeight: 600, color: "var(--label-secondary)" }}>From:</span> {email.sender}</p>}
                         {email.recipient && email.recipient !== email.sender && <p style={{ fontSize: 11, color: "var(--label-tertiary)" }}><span style={{ fontWeight: 600, color: "var(--label-secondary)" }}>To:</span> {email.recipient}</p>}
                         {email.provider && <p style={{ fontSize: 11, color: "var(--label-tertiary)" }}><span style={{ fontWeight: 600, color: "var(--label-secondary)" }}>Provider:</span> {email.provider}</p>}
-                        <div style={{ fontSize: 13, color: "var(--label-primary)", lineHeight: 1.6 }}>
-                            <div className="email-content" dangerouslySetInnerHTML={{ __html: email.content }} />
-                        </div>
+                        {isHtmlDoc ? (
+                            <>
+                                <EmailHtmlPreview html={email.content} onOpen={() => setHtmlModalOpen(true)} />
+                                <EmailHtmlModal html={email.content} open={htmlModalOpen} onOpenChange={setHtmlModalOpen} />
+                            </>
+                        ) : (
+                            <div style={{ fontSize: 13, color: "var(--label-primary)", lineHeight: 1.6 }}>
+                                <div className="email-content" dangerouslySetInnerHTML={{ __html: email.content }} />
+                            </div>
+                        )}
                     </div>
                 </div>
             </CollapsibleContent>

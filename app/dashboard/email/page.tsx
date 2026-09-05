@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, Send, Inbox, AlertCircle, MessageSquareText } from "lucide-react";
+import { Mail, Send, Inbox, AlertCircle, CheckCircle2, MessageSquareText } from "lucide-react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { subDays } from "date-fns";
 import { useData } from "@/context/DataContext";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { coerceTimestamp } from "@/lib/outreach-types";
+import { coerceTimestamp, isReplyTrackPositive } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 
 function MetricTile({ title, subtitle, value, accentColor, icon, onClick }: {
@@ -66,7 +66,7 @@ export default function EmailDashboardPage() {
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
 
     const data = useMemo(() => {
-        const empty = { totalEmails: 0, totalReplies: 0, totalNegSentiment: 0, perStep: [0, 0, 0, 0, 0] };
+        const empty = { totalEmails: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, perStep: [0, 0, 0, 0, 0] };
         if (loadingLeads) return empty;
 
         const fromD = dateRange?.from ? new Date(dateRange.from) : null;
@@ -75,24 +75,26 @@ export default function EmailDashboardPage() {
         if (toD) toD.setHours(23, 59, 59, 999);
         const inRange = (d: Date | null) => { if (!fromD || !toD) return true; if (!d) return false; return d >= fromD && d <= toD; };
 
-        let totalEmails = 0, replyCount = 0, negSentiment = 0;
+        let totalEmails = 0, replyCount = 0, posSentiment = 0, negSentiment = 0;
         const perStep = [0, 0, 0, 0, 0];
 
         (allLeads as OutreachLead[]).forEach(lead => {
             lead.email_slots.forEach(s => {
-                if (s.raw == null && !s.sent_at && !s.status) return;
+                // email_slots only contains slots where email_N itself has content
+                // (see buildEmailSlots) — s.raw is always present here.
                 const ts = coerceTimestamp(s.sent_at) || coerceTimestamp(s.obj?.timestamp) || lead.created_at;
                 if (inRange(ts ? new Date(ts) : null)) {
                     totalEmails++;
                     if (s.n >= 1 && s.n <= 5) perStep[s.n - 1]++;
                 }
             });
-            if (lead.email_replied) replyCount++;
+            if (isReplyTrackPositive(lead.email_reply_track)) replyCount++;
             const sent = String(lead.email_sentiment || "").toLowerCase();
+            if (sent.includes("positive")) posSentiment++;
             if (sent.includes("negative")) negSentiment++;
         });
 
-        return { totalEmails, totalReplies: replyCount, totalNegSentiment: negSentiment, perStep };
+        return { totalEmails, totalReplies: replyCount, totalPosSentiment: posSentiment, totalNegSentiment: negSentiment, perStep };
     }, [dateRange, allLeads, loadingLeads]);
 
     const replyRate = data.totalEmails > 0 ? ((data.totalReplies / data.totalEmails) * 100).toFixed(1) : "0";
@@ -112,6 +114,7 @@ export default function EmailDashboardPage() {
             <div className="metric-grid-sm">
                 <MetricTile title="Total Emails" subtitle={dateSubtitle} value={data.totalEmails.toLocaleString()} accentColor="var(--indigo)" icon={<Mail size={17} />} onClick={() => router.push("/dashboard/email/sent")} />
                 <MetricTile title="Total Replies" subtitle={`${replyRate}% reply rate`} value={data.totalReplies.toLocaleString()} accentColor="var(--teal)" icon={<Inbox size={17} />} onClick={() => router.push("/dashboard/email/received")} />
+                <MetricTile title="Positive Sentiment" subtitle="from email_sentiment" value={data.totalPosSentiment.toLocaleString()} accentColor="var(--green)" icon={<CheckCircle2 size={17} />} />
                 <MetricTile title="Negative Sentiment" subtitle="from email_sentiment" value={data.totalNegSentiment.toLocaleString()} accentColor="var(--red)" icon={<AlertCircle size={17} />} />
                 <MetricTile title="Reply Rate" subtitle={dateSubtitle} value={`${replyRate}%`} accentColor="var(--orange)" icon={<MessageSquareText size={17} />} />
             </div>

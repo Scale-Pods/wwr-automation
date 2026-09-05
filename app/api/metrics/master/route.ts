@@ -64,13 +64,10 @@ export async function GET(req: Request) {
         'Cache-Control': 'no-store',
     };
 
-    const outreachCols = encodeURIComponent([
-        'created_at',
-        'wa_1', 'wa_2', 'wa_3', 'wa_4', 'wa_1_sent_at',
-        'whatsapp_reply_track',
-        'email_1', 'email_2', 'email_3', 'email_4', 'email_5',
-        'email_reply_track',
-    ].join(','));
+    // select=* — hardcoding a column list drifts from the live schema (e.g. wa_4 not
+    // existing on this instance) and throws 42703. Pulling every column is safe here
+    // since only a handful of fields are read below.
+    const outreachCols = '*';
 
     const outreachFilter =
         `created_at=gte.${encodeURIComponent(fromISO)}&created_at=lte.${encodeURIComponent(toISO)}`;

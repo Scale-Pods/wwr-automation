@@ -48,12 +48,11 @@ function buildEmailSlots(r: any): EmailSlot[] {
     const slots: EmailSlot[] = [];
     for (let n = 1; n <= 5; n++) {
         const raw = r[`email_${n}`];
+        // email_N itself must have content — a _status/_sent_at with no body is not
+        // a sent email (e.g. a scheduled-but-not-yet-sent row, or stale metadata).
+        if (raw === undefined || raw === null || raw === '') continue;
         const status = r[`email_${n}_status`] ?? null;
         const sent_at = r[`email_${n}_sent_at`] ?? null;
-        if (raw === undefined || raw === null || raw === '') {
-            if (status || sent_at) slots.push({ n, raw: null, body: '', obj: null, status, sent_at });
-            continue;
-        }
         const obj = parseJsonObject(raw);
         const body = obj
             ? (obj.body_html || obj.body_text || obj.body || obj.content || obj.text || obj.subject || '')
@@ -193,7 +192,8 @@ export function consolidateLeads(data: RawLeadsResponse | any[]): OutreachLead[]
 // ─── convenience selectors used by pages ─────────────────────────────────────
 
 export function emailsSentCount(lead: OutreachLead): number {
-    return lead.email_slots.filter(s => s.raw != null || s.sent_at || s.status).length;
+    // email_slots only contains slots where email_N itself has content (see buildEmailSlots).
+    return lead.email_slots.length;
 }
 
 export function waMessagesSentCount(lead: OutreachLead): number {

@@ -129,10 +129,9 @@ export default function MasterDashboard() {
         allLeads.forEach((lead: any) => {
             if (inRange(lead.created_at)) totalLeads++;
 
-            // Emails sent — count every populated email_N slot
-            (lead.email_slots || []).forEach((s: any) => {
-                if (s.raw != null || s.sent_at || s.status) totalEmailsSent++;
-            });
+            // Emails sent — email_slots already only contains slots where email_N
+            // itself has content (see buildEmailSlots), so just count them.
+            totalEmailsSent += (lead.email_slots || []).length;
             if (lead.email_replied) totalEmailReplies++;
 
             // WhatsApp reachouts — any wa_N slot or a conversation
