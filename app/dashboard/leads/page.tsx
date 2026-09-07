@@ -285,18 +285,18 @@ export default function LeadsPage() {
                     {view === "leads" ? (
                         <>
                             <div className="overflow-x-auto">
-                                <Table style={{ minWidth: 1180 }}>
+                                <Table style={{ minWidth: 1080 }}>
                                     <TableHeader style={{ borderBottom: "1px solid var(--separator)" }}>
                                         <TableRow className="bg-[var(--fill-quaternary)] border-none hover:bg-[var(--fill-quaternary)]">
-                                            <TableHead className="w-[220px]" style={{ color: "var(--label-tertiary)" }}>Name</TableHead>
-                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Module</TableHead>
-                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Email</TableHead>
-                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Phone</TableHead>
-                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Property</TableHead>
-                                            <TableHead className="text-center" style={{ color: "var(--label-tertiary)" }}>Channels</TableHead>
-                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Stage</TableHead>
-                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Reply</TableHead>
-                                            <TableHead className="w-[230px]" style={{ color: "var(--label-tertiary)" }}>Progress</TableHead>
+                                            <TableHead className="w-[210px] h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Name</TableHead>
+                                            <TableHead className="h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Module</TableHead>
+                                            <TableHead className="h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Email</TableHead>
+                                            <TableHead className="h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Phone</TableHead>
+                                            <TableHead className="h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Property</TableHead>
+                                            <TableHead className="h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Channels</TableHead>
+                                            <TableHead className="h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Stage</TableHead>
+                                            <TableHead className="h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Reply</TableHead>
+                                            <TableHead className="w-[200px] h-9 py-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--label-tertiary)" }}>Progress</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -315,65 +315,54 @@ export default function LeadsPage() {
                                         ) : (
                                             filteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((lead, index) => {
                                                 const displayName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.name;
+                                                const pill = { display: "inline-flex", alignItems: "center", padding: "1px 7px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "capitalize" as const, lineHeight: "16px" };
                                                 return (
                                                 <TableRow key={lead.lead_id || index} className="hover:bg-[var(--fill-quaternary)] border-b border-[var(--separator)] transition-colors">
-                                                    <TableCell className="font-medium text-[var(--label-primary)] align-top">
-                                                        {displayName}
-                                                        {lead.company_name && <div className="text-[11px] text-[var(--label-tertiary)] font-normal">{lead.company_name}</div>}
-                                                        {(lead.crm_name || lead.crm_id) && (
-                                                            <div className="text-[11px] text-[var(--label-tertiary)] font-normal mt-0.5">
-                                                                {lead.crm_name && <span>{lead.crm_name}</span>}
-                                                                {lead.crm_name && lead.crm_id && <span className="opacity-50"> · </span>}
+                                                    <TableCell className="font-medium text-[var(--label-primary)] py-2 align-middle">
+                                                        <div className="text-[13px] leading-tight">{displayName}</div>
+                                                        {(lead.company_name || lead.crm_name || lead.crm_id) && (
+                                                            <div className="text-[10.5px] text-[var(--label-tertiary)] font-normal leading-tight truncate max-w-[210px]">
+                                                                {[lead.company_name, lead.crm_name].filter(Boolean).join(" · ")}
+                                                                {(lead.company_name || lead.crm_name) && lead.crm_id ? " · " : ""}
                                                                 {lead.crm_id && <span className="font-mono">{lead.crm_id}</span>}
                                                             </div>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="align-top">
-                                                        {lead.module_name ? (
-                                                            <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "color-mix(in srgb, var(--indigo) 12%, transparent)", color: "var(--indigo)" }}>
-                                                                {lead.module_name}
-                                                            </span>
-                                                        ) : <span className="text-[var(--label-tertiary)]">—</span>}
+                                                    <TableCell className="py-2 align-middle">
+                                                        {lead.module_name
+                                                            ? <span style={{ ...pill, background: "color-mix(in srgb, var(--indigo) 12%, transparent)", color: "var(--indigo)" }}>{lead.module_name}</span>
+                                                            : <span className="text-[var(--label-tertiary)]">—</span>}
                                                     </TableCell>
-                                                    <TableCell className={`text-sm align-top ${lead.email === "No Email" ? "text-[var(--label-tertiary)] italic" : "text-[var(--label-secondary)]"}`}>
+                                                    <TableCell className={`text-[12px] py-2 align-middle max-w-[220px] truncate ${lead.email === "No Email" ? "text-[var(--label-tertiary)] italic" : "text-[var(--label-secondary)]"}`}>
                                                         {lead.email}
                                                     </TableCell>
-                                                    <TableCell className="text-[var(--label-secondary)] text-sm align-top">{lead.phone || "—"}</TableCell>
-                                                    <TableCell className="align-top">
-                                                        <div className="flex flex-col gap-1">
-                                                            {lead.property_type && (
-                                                                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "color-mix(in srgb, var(--purple) 12%, transparent)", color: "var(--purple)", width: "fit-content" }}>{lead.property_type}</span>
-                                                            )}
-                                                            {lead.property_category && (
-                                                                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "color-mix(in srgb, var(--orange) 12%, transparent)", color: "var(--orange)", width: "fit-content" }}>{lead.property_category}</span>
-                                                            )}
+                                                    <TableCell className="text-[var(--label-secondary)] text-[12px] py-2 align-middle whitespace-nowrap">{lead.phone || "—"}</TableCell>
+                                                    <TableCell className="py-2 align-middle">
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {lead.property_type && <span style={{ ...pill, background: "color-mix(in srgb, var(--purple) 12%, transparent)", color: "var(--purple)" }}>{lead.property_type}</span>}
+                                                            {lead.property_category && <span style={{ ...pill, background: "color-mix(in srgb, var(--orange) 12%, transparent)", color: "var(--orange)" }}>{lead.property_category}</span>}
                                                             {!lead.property_type && !lead.property_category && <span className="text-[var(--label-tertiary)]">—</span>}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="text-center align-top">
-                                                        <div className="flex flex-col items-center gap-1.5">
-                                                            {lead.email && lead.email !== "No Email" && (
-                                                                <Badge variant="secondary" className="bg-[var(--blue)]/10 text-[var(--blue)] hover:bg-[var(--blue)]/10 border-[var(--blue)]/20 text-[12px] font-medium h-5 px-1.5 w-full justify-center gap-1"><Mail className="h-3 w-3" /> Email</Badge>
-                                                            )}
-                                                            {lead.phone && (
-                                                                <Badge variant="secondary" className="bg-[var(--green)]/10 text-[var(--green)] hover:bg-[var(--green)]/10 border-[var(--green)]/20 text-[12px] font-medium h-5 px-1.5 w-full justify-center gap-1"><MessageCircle className="h-3 w-3" /> WhatsApp</Badge>
-                                                            )}
-                                                            {lead.call_slots.length > 0 && (
-                                                                <Badge variant="secondary" className="bg-[var(--purple)]/10 text-[var(--purple)] hover:bg-[var(--purple)]/10 border-[var(--purple)]/20 text-[12px] font-medium h-5 px-1.5 w-full justify-center gap-1"><Phone className="h-3 w-3" /> Voice</Badge>
-                                                            )}
+                                                    <TableCell className="py-2 align-middle">
+                                                        <div className="flex items-center gap-1.5">
+                                                            {lead.email && lead.email !== "No Email" && <Mail className="h-3.5 w-3.5 text-[var(--blue)]" aria-label="Email" />}
+                                                            {lead.phone && <MessageCircle className="h-3.5 w-3.5 text-[var(--green)]" aria-label="WhatsApp" />}
+                                                            {lead.call_slots.length > 0 && <Phone className="h-3.5 w-3.5 text-[var(--purple)]" aria-label="Voice" />}
+                                                            {!(lead.email && lead.email !== "No Email") && !lead.phone && lead.call_slots.length === 0 && <span className="text-[var(--label-tertiary)]">—</span>}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="align-top">
-                                                        <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", background: "color-mix(in srgb, var(--blue) 12%, transparent)", color: "var(--blue)" }}>
+                                                    <TableCell className="py-2 align-middle">
+                                                        <span style={{ ...pill, textTransform: "uppercase", letterSpacing: "0.04em", background: "color-mix(in srgb, var(--blue) 12%, transparent)", color: "var(--blue)", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}>
                                                             {lead.lead_stage || lead.lead_status || "—"}
                                                         </span>
                                                     </TableCell>
-                                                    <TableCell className="align-top">
-                                                        <Badge variant={lead.replied === "Yes" ? "default" : "secondary"} className={lead.replied === "Yes" ? "bg-[var(--green)]/10 text-[var(--green)] border-[var(--green)]/20 shadow-none font-bold capitalize" : "capitalize text-[var(--label-secondary)] bg-[var(--fill-secondary)] border-[var(--glass-border)]"}>
+                                                    <TableCell className="py-2 align-middle">
+                                                        <span style={{ ...pill, background: lead.replied === "Yes" ? "color-mix(in srgb, var(--green) 12%, transparent)" : "var(--fill-secondary)", color: lead.replied === "Yes" ? "var(--green)" : "var(--label-secondary)" }}>
                                                             {lead.replied === "Yes" ? "Replied" : "Sent"}
-                                                        </Badge>
+                                                        </span>
                                                     </TableCell>
-                                                    <TableCell className="align-top"><ProgressBreakdown lead={lead} /></TableCell>
+                                                    <TableCell className="py-2 align-middle"><ProgressBreakdown lead={lead} /></TableCell>
                                                 </TableRow>
                                                 );
                                             })
