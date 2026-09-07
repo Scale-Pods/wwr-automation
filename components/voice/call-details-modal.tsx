@@ -167,7 +167,7 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                 <DialogHeader className="sr-only"><DialogTitle>Call Detail</DialogTitle></DialogHeader>
 
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0, paddingRight: 32 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0, paddingRight: 44 }}>
                     <div>
                         <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--label-primary)', letterSpacing: '-0.01em', margin: 0 }}>{extractedGuestName}</h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: 12, color: 'var(--label-secondary)' }}>

@@ -356,15 +356,17 @@ function EmailHtmlModal({ html, open, onOpenChange }: { html: string; open: bool
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+            <DialogContent className="max-w-3xl max-h-[88vh] overflow-hidden p-0 gap-0">
                 <DialogHeader className="sr-only"><DialogTitle>Email content</DialogTitle></DialogHeader>
-                <iframe
-                    ref={ref}
-                    srcDoc={html}
-                    onLoad={() => { const h = readFrameHeight(ref.current); if (h) setHeight(Math.min(2000, h)); }}
-                    title="Email content"
-                    style={{ width: "100%", height, border: "none", background: "#fff", display: "block", borderRadius: 8 }}
-                />
+                <div style={{ maxHeight: "88vh", overflowY: "auto" }}>
+                    <iframe
+                        ref={ref}
+                        srcDoc={html}
+                        onLoad={() => { const h = readFrameHeight(ref.current); if (h) setHeight(Math.min(2000, h)); }}
+                        title="Email content"
+                        style={{ width: "100%", height, border: "none", background: "#fff", display: "block", borderRadius: 8 }}
+                    />
+                </div>
             </DialogContent>
         </Dialog>
     );
