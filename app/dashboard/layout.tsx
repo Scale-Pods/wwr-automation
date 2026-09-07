@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
     LayoutDashboard, Mail, MessageCircle, Mic, Settings,
     LogOut, ChevronDown, Wallet, BarChart2, Users, Send,
-    Key, ExternalLink, Sun, Moon, Inbox, AlertCircle, UserMinus,
+    Key, ExternalLink, Inbox, AlertCircle, UserMinus,
     MessageSquare, Phone, Activity, Globe
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
@@ -78,7 +78,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 function DashboardContent({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const [dark, setDark] = useState(true);
     const [isHovered, setIsHovered] = useState(false);
     const [walletModal, setWalletModal] = useState<{ isOpen: boolean; type: 'vapi' | 'maqsam' }>({
         isOpen: false, type: 'vapi',
@@ -94,8 +93,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     }, [isExpanded]);
 
     useEffect(() => {
-        document.documentElement.classList.toggle('dark', dark);
-    }, [dark]);
+        document.documentElement.classList.add('dark');
+    }, []);
 
     const { calls, voiceBalance, maqsamBalance, loadingBalances, loadingCalls } = useData();
 
@@ -329,27 +328,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                             ))}
                         </div>
                     )}
-                    <button
-                        onClick={() => setDark(d => !d)}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 12,
-                            padding: '10px 12px', borderRadius: '12px',
-                            background: 'transparent', border: 'none', cursor: 'pointer',
-                            color: 'var(--label-secondary)',
-                            justifyContent: isExpanded ? 'flex-start' : 'center',
-                            transition: 'all 0.2s ease',
-                        }}
-                        className="hover:bg-[var(--fill-tertiary)] hover:text-[var(--label-primary)]"
-                    >
-                        {dark ? <Sun size={18} style={{ flexShrink: 0 }} /> : <Moon size={18} style={{ flexShrink: 0 }} />}
-                        <span style={{ 
-                            opacity: isExpanded ? 1 : 0, width: isExpanded ? 'auto' : 0, 
-                            overflow: 'hidden', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', transition: 'all 0.3s ease'
-                        }}>
-                            {dark ? 'Light Mode' : 'Dark Mode'}
-                        </span>
-                    </button>
-
                     <button
                         onClick={async () => { await logout(); window.location.href = '/'; }}
                         style={{
