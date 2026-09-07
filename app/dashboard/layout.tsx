@@ -80,7 +80,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const [dark, setDark] = useState(true);
     const [isHovered, setIsHovered] = useState(false);
-    const [walletModal, setWalletModal] = useState<{ isOpen: boolean; type: 'vapi' | 'maqsam' | 'twilio' }>({
+    const [walletModal, setWalletModal] = useState<{ isOpen: boolean; type: 'vapi' | 'maqsam' }>({
         isOpen: false, type: 'vapi',
     });
     const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
@@ -97,11 +97,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         document.documentElement.classList.toggle('dark', dark);
     }, [dark]);
 
-    const { calls, voiceBalance, maqsamBalance, twilioBalance, loadingBalances, loadingCalls } = useData();
+    const { calls, voiceBalance, maqsamBalance, loadingBalances, loadingCalls } = useData();
 
     const walletChips = [
         { type: 'vapi' as const, icon: <Mic size={13} />, color: '#0A84FF' },
-        { type: 'twilio' as const, icon: <MessageCircle size={13} />, color: '#FF453A' },
         { type: 'maqsam' as const, icon: <Wallet size={13} />, color: '#40CBE0' },
     ];
 
@@ -114,7 +113,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             const phoneStr = String(c.phone || c.customer_number || "");
             const isUAE = phoneStr.startsWith('+971') || phoneStr.startsWith('971');
             return isMaqsam || isUAE || isSpecificNum;
-        }).reduce((acc: number, call: any) => acc + (call.breakdown?.telephony || call.costValue || 0), 0);
+        }).reduce((acc: number, call: any) => acc + (call.breakdown?.telephony ?? call.telephonyCost ?? 0), 0);
     }, [calls]);
 
     let currentContext = "master";
@@ -387,14 +386,13 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                 type={walletModal.type}
                 onClose={() => setWalletModal(m => ({ ...m, isOpen: false }))}
                 maqsamBalance={maqsamBalance}
-                twilioBalance={twilioBalance}
                 calls={calls}
             />
         </div>
     );
 }
 
-function SidebarWalletModal({ isOpen, onClose, type, maqsamBalance, twilioBalance, calls }: any) {
+function SidebarWalletModal({ isOpen, onClose, type, maqsamBalance, calls }: any) {
     const vapiAgentUsed = useMemo(() => {
         if (!calls || !Array.isArray(calls)) return 0;
         return calls.filter((c: any) => c.source === 'vapi').reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
@@ -402,10 +400,10 @@ function SidebarWalletModal({ isOpen, onClose, type, maqsamBalance, twilioBalanc
 
     const titles: Record<string, string> = {
         vapi: 'Vapi Wallet',
-        maqsam: 'Maqsam Telephony', twilio: 'Twilio Account',
+        maqsam: 'Maqsam Telephony',
     };
     const accentColors: Record<string, string> = {
-        vapi: '#0A84FF', maqsam: '#40CBE0', twilio: '#FF453A',
+        vapi: '#0A84FF', maqsam: '#40CBE0',
     };
     const accent = accentColors[type] || '#0A84FF';
 
@@ -422,14 +420,6 @@ function SidebarWalletModal({ isOpen, onClose, type, maqsamBalance, twilioBalanc
                         <div style={{ background: `${accent}0F`, borderRadius: 16, padding: '28px 24px', textAlign: 'center', outline: `1px solid ${accent}22`, outlineOffset: -1 }}>
                             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label-tertiary)', marginBottom: 8 }}>Vapi Credits Used</div>
                             <div style={{ fontSize: 44, fontWeight: 300, letterSpacing: '-0.03em', color: accent, fontVariantNumeric: 'tabular-nums' }}>${vapiAgentUsed.toFixed(2)}</div>
-                        </div>
-                    )}
-                    {type === 'twilio' && (
-                        <div style={{ background: `${accent}0F`, borderRadius: 16, padding: '24px', textAlign: 'center', outline: `1px solid ${accent}22`, outlineOffset: -1 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label-tertiary)', marginBottom: 8 }}>Remaining Balance</div>
-                            <div style={{ fontSize: 40, fontWeight: 300, letterSpacing: '-0.03em', color: accent, fontVariantNumeric: 'tabular-nums' }}>
-                                {typeof twilioBalance?.balance === 'number' ? `$${twilioBalance.balance.toFixed(2)}` : '—'}
-                            </div>
                         </div>
                     )}
                     {type === 'maqsam' && (

@@ -1,38 +1,8 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-import RATES_DATA from '../../../context/rates.json';
 import { OUTREACH_TABLE, VAPI_CALL_LOGS } from '@/lib/outreach-types';
+import { countryOf, dialCodeOf, telephonyCost } from '@/lib/telephony-cost';
 
 export const dynamic = 'force-dynamic';
-
-// --- Helper: Number Normalization ---
-function cleanPhoneNumber(num: any): string {
-    if (!num) return 'Unknown';
-    const str = String(num).replace(/\s+/g, '').replace(/\+/g, '').replace(/\D/g, '');
-    if (!str || str.length < 5 || str.length > 22) return 'Unknown';
-    return str;
-}
-
-// --- Rate Lookup ---
-let ratesCache: any[] | null = null;
-function getRateInfo(phoneNumber: string) {
-    try {
-        if (!ratesCache) {
-            const ratesData = fs.readFileSync(path.join(process.cwd(), 'data', 'rates.json'), 'utf8');
-            ratesCache = JSON.parse(ratesData);
-        }
-    } catch {
-        ratesCache = RATES_DATA as any;
-    }
-    const cleaned = cleanPhoneNumber(phoneNumber);
-    if (cleaned === 'Unknown') return null;
-    const dataToFilter = Array.isArray(ratesCache) ? ratesCache : (Array.isArray(RATES_DATA) ? (RATES_DATA as any) : []);
-    const matches = dataToFilter.filter((r: any) => cleaned.startsWith(String(r.Prefix)));
-    if (matches.length === 0) return null;
-    matches.sort((a: any, b: any) => String(b.Prefix).length - String(a.Prefix).length);
-    return matches[0];
-}
 
 const SUPA_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/$/, '');
 const SUPA_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -100,7 +70,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
 
     const normalizeRow = (d: any) => {
         const dur = d.duration_seconds || 0;
-        const costVal = d.cost_usd ?? 0;
+        const agentCost = Number(d.cost_usd ?? 0);
         const ph = d.customer_phone || 'Unknown';
         const cleanPh = String(ph).replace(/\D/g, '');
 
@@ -117,13 +87,25 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
 
         const isInbound = d.type === 'inboundPhoneCall' || d.type === 'Inbound';
 
+        // Carrier cost from context/rates.json, billed per started minute.
+        const telephony = telephonyCost({
+            durationSeconds: dur,
+            customerPhone: ph,
+            isInbound,
+        });
+        const totalCost = Math.round((agentCost + telephony) * 1e4) / 1e4;
+
         return {
             id: d.id,
             startedAt: d.started_at,
             durationSeconds: dur,
-            costValue: costVal,
-            cost: `$${Number(costVal).toFixed(3)}`,
+            durationMinutes: Math.round((dur / 60) * 100) / 100,
+            costValue: totalCost,
+            cost: `$${totalCost.toFixed(3)}`,
+            agentCost,
+            telephonyCost: telephony,
             phone: ph,
+            dialCode: dialCodeOf(ph),
             name: resolvedName,
             leadId: lead ? (lead.lead_id || lead.crm_id) : (d.lead_id || null),
             leadStatus: lead ? (lead.lead_status || null) : null,
@@ -136,7 +118,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
                 : (d.status || 'answered'),
             type: isInbound ? 'Inbound' : 'Outbound',
             isInbound,
-            country: getRateInfo(ph)?.Country || 'Unknown',
+            country: countryOf(ph),
             source: d.source === 'elevenlabs' ? 'elevenlabs' : (d.source || 'vapi'),
             vapiAccount: d.vapi_account,
             vapiPipeline: d.vapi_pipeline || null,
@@ -145,7 +127,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
             assistantId: d.assistantId || null,
             phoneNumber: 'Unknown',
             endedReason: null,
-            breakdown: { agent: costVal, telephony: 0, total: costVal },
+            breakdown: { agent: agentCost, telephony, total: totalCost },
             raw: { id: d.id, startedAt: d.started_at, assistantId: d.assistantId, isInbound, lead_id: d.lead_id },
         };
     };

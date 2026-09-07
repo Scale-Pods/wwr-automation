@@ -1,16 +1,15 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Mail, MessageCircle, Mic, ExternalLink, Copy, Eye, EyeOff, ShieldCheck, Wallet, Phone, BarChart3, Settings, Smartphone } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { MessageCircle, Mic, Copy, Wallet, Phone, BarChart3, AtSign } from "lucide-react";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
 
 export default function CredentialsPage() {
-    const { calls, twilioBalance, loadingBalances } = useData();
+    const { calls } = useData();
     const router = useRouter();
 
     const vapiAgentUsed = React.useMemo(() => {
@@ -49,8 +48,23 @@ export default function CredentialsPage() {
                     iconBg="bg-cyan-50/10"
                 >
                     <div className="space-y-4 bg-[var(--fill-quaternary)] p-4 rounded-xl border border-[var(--glass-border)]">
-                        <ReadOnlyField label="Twilio (US)" value="+1 (844) 639-0129" />
+                        <ReadOnlyField label="Maqsam (Qatar)" value=" " />
                         <ReadOnlyField label="Voice Agent ID" value="World_Wide_Real_Estate_Voice_Agent" />
+                    </div>
+                </CredentialSection>
+
+                {/* Contact Endpoints Section */}
+                <CredentialSection
+                    title="Contact Endpoints"
+                    description="Outreach identities used across email, WhatsApp, and voice."
+                    icon={AtSign}
+                    iconColor="text-violet-600"
+                    iconBg="bg-violet-50/10"
+                >
+                    <div className="grid gap-4">
+                        <PlaceholderField label="Email" placeholder="name@company.com" />
+                        <PlaceholderField label="WhatsApp Number" placeholder="+974 0000 0000" />
+                        <PlaceholderField label="Phone Number" placeholder="+974 0000 0000" />
                     </div>
                 </CredentialSection>
 
@@ -93,55 +107,6 @@ export default function CredentialsPage() {
                     </div>
                 </CredentialSection>
 
-                {/* Twilio Section */}
-                <CredentialSection
-                    title="Twilio Telephony"
-                    description="Real-time balance and usage records for Twilio."
-                    icon={Smartphone}
-                    iconColor="text-rose-600"
-                    iconBg="bg-rose-50/10"
-                >
-                    <div className="space-y-4">
-                        <div className="bg-[var(--fill-quaternary)] rounded-lg p-4 border border-[var(--glass-border)] flex items-center justify-between shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-[var(--fill-secondary)] rounded-md border border-[var(--glass-border)]">
-                                    <Smartphone className="h-5 w-5 text-rose-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-[var(--label-primary)]">Twilio Account</p>
-                                    <p className="text-xs text-[var(--label-tertiary)] font-mono">{twilioBalance?.account_sid ? `${twilioBalance.account_sid.slice(0, 8)}...` : '---'}</p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-2xl font-black text-rose-600">
-                                    {twilioBalance?.balance !== undefined ? `$${twilioBalance.balance.toFixed(2)}` : '---'}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 text-center">
-                            <div className="bg-[var(--fill-secondary)] p-3 rounded-lg border border-[var(--glass-border)] shadow-sm">
-                                <p className="text-[10px] font-bold text-[var(--label-tertiary)] uppercase tracking-wider">Total Recharge</p>
-                                <p className="text-sm font-bold text-[var(--label-primary)] mt-0.5">
-                                    {twilioBalance?.total_recharge !== undefined ? `$${twilioBalance.total_recharge.toFixed(2)}` : '---'}
-                                </p>
-                            </div>
-                            <div className="bg-[var(--fill-secondary)] p-3 rounded-lg border border-[var(--glass-border)] shadow-sm">
-                                <p className="text-[10px] font-bold text-[var(--label-tertiary)] uppercase tracking-wider">Used</p>
-                                <p className="text-sm font-bold text-[var(--label-secondary)] mt-0.5">
-                                    {twilioBalance?.used !== undefined ? `$${twilioBalance.used.toFixed(2)}` : '---'}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="pt-2">
-                            <Button size="sm" className="w-full bg-rose-600 hover:bg-rose-700 text-white text-xs h-9 gap-1.5" onClick={() => window.open('https://console.twilio.com', '_blank')}>
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                Twilio Console
-                            </Button>
-                        </div>
-                    </div>
-                </CredentialSection>
             </div>
         </div>
     );
@@ -164,6 +129,18 @@ function CredentialSection({ title, description, icon: Icon, iconColor, iconBg, 
             <div style={{ padding: 20 }}>
                 {children}
             </div>
+        </div>
+    );
+}
+
+function PlaceholderField({ label, placeholder }: { label: string; placeholder: string }) {
+    return (
+        <div className="space-y-1">
+            <Label className="text-[10px] font-bold text-[var(--label-tertiary)] uppercase tracking-wider">{label}</Label>
+            <Input
+                placeholder={placeholder}
+                className="h-9 text-xs bg-[var(--fill-tertiary)] border border-[var(--glass-border)] text-[var(--label-primary)] rounded-md"
+            />
         </div>
     );
 }

@@ -13,11 +13,10 @@ import { format, subDays } from "date-fns";
 import { formatDuration } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
-const DynamicRowCells = ({ call, leads, telephonyCost }: { call: any, leads: any[], telephonyCost?: number }) => {
+const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
     let guestName = call.name || "Guest";
     const guestNum = call.phone || "Unknown";
     const realType = call.type || (call.isInbound ? "Inbound" : "Outbound");
-    const isInboundState = call.isInbound;
 
     if ((!guestName || guestName === "Guest" || guestName === "Unknown") && call.phone && leads) {
         const targetPhone = call.phone.replace(/\D/g, '');
@@ -27,6 +26,11 @@ const DynamicRowCells = ({ call, leads, telephonyCost }: { call: any, leads: any
         }
     }
 
+    const agent = Number(call.breakdown?.agent ?? call.agentCost ?? 0);
+    const telephony = Number(call.breakdown?.telephony ?? call.telephonyCost ?? 0);
+    const total = Number(call.breakdown?.total ?? (agent + telephony));
+    const minutes = ((call.durationSeconds || 0) / 60);
+
     return (
         <>
             <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: 'var(--label-primary)' }}>
@@ -35,7 +39,7 @@ const DynamicRowCells = ({ call, leads, telephonyCost }: { call: any, leads: any
                     {guestName}
                 </div>
             </td>
-            <td style={{ padding: '10px 14px', fontSize: 12, fontFamily: 'monospace', color: 'var(--label-secondary)' }}>{guestNum}</td>
+            <td style={{ padding: '10px 14px', fontSize: 12, fontFamily: 'monospace', color: 'var(--label-secondary)', whiteSpace: 'nowrap' }}>{guestNum}</td>
             <td style={{ padding: '10px 14px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 'var(--radius-xs)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: 'rgba(10,132,255,0.10)', color: 'var(--blue)' }}>
@@ -43,19 +47,27 @@ const DynamicRowCells = ({ call, leads, telephonyCost }: { call: any, leads: any
                     </span>
                 </div>
             </td>
-            <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--label-secondary)', fontWeight: 500 }}>{formatDuration(call.durationSeconds)}</td>
-            <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--label-tertiary)' }}>{call.country || 'Unknown'}</td>
+            <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--label-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
+                    <span>{formatDuration(call.durationSeconds)}</span>
+                    <span style={{ fontSize: 10, color: 'var(--label-tertiary)', fontFamily: 'monospace' }}>{minutes.toFixed(2)} min</span>
+                </div>
+            </td>
+            <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--label-tertiary)', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35 }}>
+                    <span style={{ color: 'var(--label-secondary)' }}>{call.country || 'Unknown'}</span>
+                    {call.dialCode ? <span style={{ fontFamily: 'monospace' }}>{call.dialCode}</span> : null}
+                </div>
+            </td>
             <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 700, color: 'var(--green)' }}>
                 <Popover>
                     <PopoverTrigger asChild>
                         <button style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'help', color: 'var(--green)', fontSize: 12, fontWeight: 700 }} onClick={(e) => e.stopPropagation()}>
-                            {telephonyCost !== undefined && telephonyCost !== -1
-                                ? `$${((call.breakdown?.agent || 0) + telephonyCost).toFixed(3)}`
-                                : call.cost}
+                            ${total.toFixed(3)}
                             <Info style={{ width: 11, height: 11, color: 'var(--label-quaternary)' }} />
                         </button>
                     </PopoverTrigger>
-                    <PopoverContent className="apple-dialog" style={{ width: 220, padding: 14 }} onClick={(e) => e.stopPropagation()}>
+                    <PopoverContent className="apple-dialog" style={{ width: 240, padding: 14 }} onClick={(e) => e.stopPropagation()}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--hairline)', paddingBottom: 8 }}>
                                 <Activity style={{ width: 14, height: 14, color: 'var(--blue)' }} />
@@ -64,24 +76,20 @@ const DynamicRowCells = ({ call, leads, telephonyCost }: { call: any, leads: any
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
                                     <span>Agent (Vapi/AI):</span>
-                                    <span style={{ fontFamily: 'monospace', color: 'var(--label-primary)' }}>${(call.breakdown?.agent || 0).toFixed(3)}</span>
+                                    <span style={{ fontFamily: 'monospace', color: 'var(--label-primary)' }}>${agent.toFixed(3)}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
-                                    <span>Telephony:</span>
-                                    {telephonyCost === -1 ? (
-                                        <span style={{ fontFamily: 'monospace', color: 'var(--label-tertiary)', fontStyle: 'italic' }}>loading...</span>
-                                    ) : (
-                                        <span style={{ fontFamily: 'monospace', color: 'var(--label-primary)' }}>${(telephonyCost !== undefined ? telephonyCost : (call.breakdown?.telephony || 0)).toFixed(3)}</span>
-                                    )}
+                                    <span>Telephony{call.country && call.country !== 'Unknown' ? ` (${call.country})` : ''}:</span>
+                                    <span style={{ fontFamily: 'monospace', color: 'var(--label-primary)' }}>${telephony.toFixed(3)}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--label-tertiary)' }}>
+                                    <span>Billed minutes:</span>
+                                    <span style={{ fontFamily: 'monospace' }}>{Math.max(0, Math.ceil((call.durationSeconds || 0) / 60))}</span>
                                 </div>
                             </div>
                             <div style={{ borderTop: '1px solid var(--hairline)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--label-primary)' }}>
                                 <span>Total:</span>
-                                <span style={{ color: 'var(--green)' }}>
-                                    {telephonyCost !== undefined && telephonyCost !== -1
-                                        ? `$${((call.breakdown?.agent || 0) + telephonyCost).toFixed(3)}`
-                                        : call.cost}
-                                </span>
+                                <span style={{ color: 'var(--green)' }}>${total.toFixed(3)}</span>
                             </div>
                         </div>
                     </PopoverContent>
@@ -106,7 +114,6 @@ export default function VoiceLogsPage() {
     const [sortBy, setSortBy] = useState("newest");
     const [regionFilter, setRegionFilter] = useState("all");
     const [costModalOpen, setCostModalOpen] = useState(false);
-    const [telephonyCosts, setTelephonyCosts] = useState<Record<string, number>>({});
     const [exporting, setExporting] = useState(false);
 
     useEffect(() => {
@@ -221,25 +228,17 @@ export default function VoiceLogsPage() {
         if (calls.length === 0) return;
         setExporting(true);
         try {
-            const missingCostCalls = calls.filter(c => telephonyCosts[c.id] === undefined);
-            let allCosts = { ...telephonyCosts };
-            if (missingCostCalls.length > 0) {
-                const res = await fetch('/api/calls/telephony-cost', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ calls: missingCostCalls.map(c => ({ id: c.id, phoneNumber: c.phoneNumber, phone: c.phone, durationSeconds: c.durationSeconds, isInbound: c.isInbound })) })
-                });
-                const data = await res.json();
-                if (data && data.costs) { allCosts = { ...allCosts, ...data.costs }; setTelephonyCosts(prev => ({ ...prev, ...data.costs })); }
-            }
-            const headers = ["Name", "Phone", "Type", "Duration (sec)", "Duration (min)", "Country", "Telephony Cost", "Total Cost", "Status", "Date"];
+            const headers = ["Name", "Phone", "Dial Code", "Country", "Type", "Duration (sec)", "Duration (min)", "Agent Cost", "Telephony Cost", "Total Cost", "Status", "Date"];
             const csvData = calls.map(call => {
-                const tCost = allCosts[call.id];
-                const agentCost = call.breakdown?.agent || 0;
-                let totalCostStr = call.cost;
-                let telephonyCostStr = "N/A";
-                if (tCost !== undefined && tCost !== -1) { telephonyCostStr = `$${tCost.toFixed(3)}`; totalCostStr = `$${(agentCost + tCost).toFixed(3)}`; }
-                return [call.name || "Guest", call.phone || "Unknown", call.type, call.durationSeconds || 0, ((call.durationSeconds || 0) / 60).toFixed(2), call.country || "Unknown", telephonyCostStr, totalCostStr, call.status, call.displayDate].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+                const agentCost = Number(call.breakdown?.agent ?? call.agentCost ?? 0);
+                const telephony = Number(call.breakdown?.telephony ?? call.telephonyCost ?? 0);
+                const total = Number(call.breakdown?.total ?? (agentCost + telephony));
+                return [
+                    call.name || "Guest", call.phone || "Unknown", call.dialCode || "", call.country || "Unknown",
+                    call.type, call.durationSeconds || 0, ((call.durationSeconds || 0) / 60).toFixed(2),
+                    `$${agentCost.toFixed(3)}`, `$${telephony.toFixed(3)}`, `$${total.toFixed(3)}`,
+                    call.status, call.displayDate,
+                ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
             });
             const csvContent = "﻿" + [headers.join(","), ...csvData].join("\n");
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -254,18 +253,6 @@ export default function VoiceLogsPage() {
     };
 
     const paginatedCalls = calls.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-    useEffect(() => {
-        if (!paginatedCalls || paginatedCalls.length === 0) return;
-        const callsToFetch = paginatedCalls.filter(c => telephonyCosts[c.id] === undefined);
-        if (callsToFetch.length === 0) return;
-        setTelephonyCosts(prev => { const fetching = { ...prev }; callsToFetch.forEach(c => fetching[c.id] = -1); return fetching; });
-        fetch('/api/calls/telephony-cost', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ calls: callsToFetch.map(c => ({ id: c.id, phoneNumber: c.phoneNumber, phone: c.phone, durationSeconds: c.durationSeconds, isInbound: c.isInbound, startedAt: c.startedAt })) })
-        }).then(res => res.json()).then(data => { if (data && data.costs) setTelephonyCosts(prev => ({ ...prev, ...data.costs })); }).catch(err => console.error("Error fetching telephony costs", err));
-    }, [paginatedCalls]);
 
     return (
         <div className="space-y-4 pb-10 relative min-h-[500px]">
@@ -381,7 +368,7 @@ export default function VoiceLogsPage() {
                     <table className="w-full text-left">
                         <thead style={{ borderBottom: '1px solid var(--hairline)' }}>
                             <tr style={{ background: 'var(--fill-quaternary)' }}>
-                                {['Name', 'Guest Number', 'Type', 'Duration', 'Country', 'Cost', 'Status', 'Date & Time'].map(h => (
+                                {['Name', 'Guest Number', 'Type', 'Duration', 'Country / Code', 'Cost', 'Status', 'Date & Time'].map(h => (
                                     <th key={h} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', whiteSpace: 'nowrap' }}>{h}</th>
                                 ))}
                             </tr>
@@ -400,7 +387,7 @@ export default function VoiceLogsPage() {
                                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                                         onClick={() => { setSelectedCall(call); setModalOpen(true); }}
                                     >
-                                        <DynamicRowCells call={call} leads={leads} telephonyCost={telephonyCosts[call.id]} />
+                                        <DynamicRowCells call={call} leads={leads} />
                                         <td style={{ padding: '10px 14px' }}>
                                             <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 'var(--radius-xs)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: call.status === 'answered' ? 'rgba(48,209,88,0.12)' : 'var(--fill-tertiary)', color: call.status === 'answered' ? 'var(--green)' : 'var(--label-tertiary)', border: `1px solid ${call.status === 'answered' ? 'transparent' : 'var(--hairline)'}` }}>
                                                 {call.status}

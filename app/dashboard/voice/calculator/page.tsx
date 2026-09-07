@@ -60,32 +60,15 @@ export default function VoiceCalculatorPage() {
 
         setCalculating(true);
         try {
-            const res = await fetch('/api/calls/telephony-cost', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    calls: filteredCalls.map((c: any) => ({
-                        id: c.id, phoneNumber: c.phoneNumber, phone: c.phone,
-                        durationSeconds: c.durationSeconds, isInbound: c.isInbound, startedAt: c.startedAt
-                    }))
-                })
-            });
-            const data = await res.json();
-            const telephonyCosts = data.costs || {};
-
+            // /api/calls already embeds breakdown.{agent,telephony,total} on every
+            // call (computed from context/rates.json). No extra round-trip needed.
             let agentTotal = 0, telephonyTotal = 0, totalDuration = 0;
             filteredCalls.forEach((call: any) => {
-                const tCost = telephonyCosts[call.id];
-                const aCost = call.breakdown?.agent || 0;
+                const aCost = Number(call.breakdown?.agent ?? call.agentCost ?? 0);
+                const tCost = Number(call.breakdown?.telephony ?? call.telephonyCost ?? 0);
                 totalDuration += (call.durationSeconds || 0);
-                if (tCost !== undefined && tCost !== -1) {
-                    agentTotal += aCost;
-                    telephonyTotal += tCost;
-                } else {
-                    const rawTotal = parseFloat(call.cost.replace('$', '')) || 0;
-                    agentTotal += aCost;
-                    telephonyTotal += Math.max(0, rawTotal - aCost);
-                }
+                agentTotal += aCost;
+                telephonyTotal += tCost;
             });
 
             setResults({ totalCost: agentTotal + telephonyTotal, agentTotal, telephonyTotal, totalDuration, callCount: filteredCalls.length, calculatedAt: new Date() });

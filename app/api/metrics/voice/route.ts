@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { telephonyCost } from '@/lib/telephony-cost';
 
 export const dynamic = 'force-dynamic';
 
@@ -132,7 +133,9 @@ export async function GET(req: Request) {
 
         datedRows.forEach((r: any) => {
             const dur = r.duration_seconds || 0;
-            const cost = r.cost_usd || 0;
+            const isInboundRow = r.type === 'inboundPhoneCall' || r.type === 'Inbound';
+            const telephony = telephonyCost({ durationSeconds: dur, customerPhone: r.customer_phone, isInbound: isInboundRow });
+            const cost = (r.cost_usd || 0) + telephony;
             const account = (r.vapi_account || '').toUpperCase();
             const isSuccess = getSuccessStatus(r.status);
             const isB2b = account === 'B2B';

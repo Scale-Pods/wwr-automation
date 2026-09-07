@@ -42,6 +42,8 @@ export interface OutreachLead {
     // identity
     lead_id: string;
     crm_id: string | null;
+    crm_name: string | null;
+    module_name: string | null;
     id: string;                // alias of lead_id, kept for legacy component props
 
     // contact

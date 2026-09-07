@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { countryOf, dialCodeOf, telephonyCost } from '@/lib/telephony-cost';
 
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
 
@@ -83,13 +84,29 @@ export async function GET(
                     let assistantPhone = String(rawAssistant).replace(/\D/g, '');
                     if (assistantPhone.length > 15) assistantPhone = "Internal-Line";
 
+                    const durationSeconds = data.durationSeconds || 0;
+                    const agentCost = typeof data.cost === 'number' ? data.cost : 0;
+                    const telephony = telephonyCost({
+                        durationSeconds,
+                        customerPhone,
+                        botPhone: assistantPhone,
+                        isInbound,
+                    });
+                    const totalCost = Math.round((agentCost + telephony) * 1e4) / 1e4;
+
                     return NextResponse.json({
                         ...data,
                         id: data.id,
                         name: resolveName(customer.name, customerPhone),
                         startedAt: data.startedAt,
-                        durationSeconds: data.durationSeconds || 0,
-                        cost: typeof data.cost === 'number' ? `$${data.cost.toFixed(3)}` : (data.cost || "$0.00"),
+                        durationSeconds,
+                        durationMinutes: Math.round((durationSeconds / 60) * 100) / 100,
+                        cost: `$${totalCost.toFixed(3)}`,
+                        agentCost,
+                        telephonyCost: telephony,
+                        breakdown: { agent: agentCost, telephony, total: totalCost },
+                        country: countryOf(customerPhone),
+                        dialCode: dialCodeOf(customerPhone),
                         phoneNumber: assistantPhone, // Bot
                         customer_number: customerPhone, // Guest
                         phone: customerPhone !== "Unknown" ? `+${customerPhone}` : "Unknown", // Add 'phone' for modal compatibility

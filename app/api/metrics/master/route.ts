@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { OUTREACH_TABLE, VAPI_CALL_LOGS, isReplyTrackPositive } from '@/lib/outreach-types';
+import { telephonyCost } from '@/lib/telephony-cost';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,7 +73,7 @@ export async function GET(req: Request) {
     const outreachFilter =
         `created_at=gte.${encodeURIComponent(fromISO)}&created_at=lte.${encodeURIComponent(toISO)}`;
 
-    const callCols = encodeURIComponent(['id', 'started_at', 'cost_usd'].join(','));
+    const callCols = encodeURIComponent(['id', 'started_at', 'cost_usd', 'customer_phone', 'duration_seconds', 'type'].join(','));
     const callFilter =
         `started_at=gte.${encodeURIComponent(fromISO)}&started_at=lte.${encodeURIComponent(toISO)}`;
 
@@ -105,7 +106,11 @@ export async function GET(req: Request) {
         });
 
         let voiceCallCost = 0;
-        callRows.forEach(c => { voiceCallCost += Number(c.cost_usd) || 0; });
+        callRows.forEach(c => {
+            const isInbound = c.type === 'inboundPhoneCall' || c.type === 'Inbound';
+            const telephony = telephonyCost({ durationSeconds: c.duration_seconds || 0, customerPhone: c.customer_phone, isInbound });
+            voiceCallCost += (Number(c.cost_usd) || 0) + telephony;
+        });
 
         const leadsDaily = Object.entries(dailyMap)
             .sort(([a], [b]) => a.localeCompare(b))

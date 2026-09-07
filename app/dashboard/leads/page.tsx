@@ -164,7 +164,12 @@ export default function LeadsPage() {
                 const match = lead.name?.toLowerCase().includes(s)
                     || lead.email?.toLowerCase().includes(s)
                     || lead.phone?.toLowerCase().includes(s)
-                    || (lead.company_name || "").toLowerCase().includes(s);
+                    || (lead.company_name || "").toLowerCase().includes(s)
+                    || (lead.crm_id || "").toLowerCase().includes(s)
+                    || (lead.crm_name || "").toLowerCase().includes(s)
+                    || (lead.module_name || "").toLowerCase().includes(s)
+                    || (lead.property_type || "").toLowerCase().includes(s)
+                    || (lead.property_category || "").toLowerCase().includes(s);
                 if (!match) return false;
             }
 
@@ -242,7 +247,7 @@ export default function LeadsPage() {
                     <div style={{ padding: "12px 14px", background: "var(--fill-quaternary)", borderBottom: "1px solid var(--separator)", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
                         <div style={{ position: "relative", flex: 1, minWidth: 240 }}>
                             <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--label-tertiary)", pointerEvents: "none" }} />
-                            <Input placeholder="Search by name, company, email, or phone..." className="border-none" style={{ paddingLeft: 36, height: 40, background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)", borderRadius: "var(--radius-md)", fontSize: 13 }} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                            <Input placeholder="Search by name, CRM, module, email, phone, or property..." className="border-none" style={{ paddingLeft: 36, height: 40, background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)", borderRadius: "var(--radius-md)", fontSize: 13 }} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         </div>
                         <div className="flex items-center gap-3">
                             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -280,22 +285,24 @@ export default function LeadsPage() {
                     {view === "leads" ? (
                         <>
                             <div className="overflow-x-auto">
-                                <Table>
+                                <Table style={{ minWidth: 1180 }}>
                                     <TableHeader style={{ borderBottom: "1px solid var(--separator)" }}>
                                         <TableRow className="bg-[var(--fill-quaternary)] border-none hover:bg-[var(--fill-quaternary)]">
-                                            <TableHead className="w-[200px]" style={{ color: "var(--label-tertiary)" }}>Name</TableHead>
-                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Phone</TableHead>
-                                            <TableHead className="text-center" style={{ color: "var(--label-tertiary)" }}>Channels</TableHead>
+                                            <TableHead className="w-[220px]" style={{ color: "var(--label-tertiary)" }}>Name</TableHead>
+                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Module</TableHead>
                                             <TableHead style={{ color: "var(--label-tertiary)" }}>Email</TableHead>
+                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Phone</TableHead>
+                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Property</TableHead>
+                                            <TableHead className="text-center" style={{ color: "var(--label-tertiary)" }}>Channels</TableHead>
                                             <TableHead style={{ color: "var(--label-tertiary)" }}>Stage</TableHead>
-                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Reply Status</TableHead>
-                                            <TableHead className="w-[250px]" style={{ color: "var(--label-tertiary)" }}>Progress</TableHead>
+                                            <TableHead style={{ color: "var(--label-tertiary)" }}>Reply</TableHead>
+                                            <TableHead className="w-[230px]" style={{ color: "var(--label-tertiary)" }}>Progress</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {loading && leads.length === 0 ? (
                                             <TableRow className="border-none hover:bg-transparent">
-                                                <TableCell colSpan={7} className="h-24 text-center">
+                                                <TableCell colSpan={9} className="h-24 text-center">
                                                     <div className="flex items-center justify-center gap-2 text-[var(--label-secondary)]">
                                                         <Loader2 className="h-4 w-4 animate-spin" /> Loading leads...
                                                     </div>
@@ -303,17 +310,47 @@ export default function LeadsPage() {
                                             </TableRow>
                                         ) : filteredLeads.length === 0 ? (
                                             <TableRow className="border-none hover:bg-transparent">
-                                                <TableCell colSpan={7} className="h-24 text-center text-[var(--label-secondary)]">No leads matching these filters.</TableCell>
+                                                <TableCell colSpan={9} className="h-24 text-center text-[var(--label-secondary)]">No leads matching these filters.</TableCell>
                                             </TableRow>
                                         ) : (
-                                            filteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((lead, index) => (
+                                            filteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((lead, index) => {
+                                                const displayName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.name;
+                                                return (
                                                 <TableRow key={lead.lead_id || index} className="hover:bg-[var(--fill-quaternary)] border-b border-[var(--separator)] transition-colors">
-                                                    <TableCell className="font-medium text-[var(--label-primary)]">
-                                                        {lead.name}
+                                                    <TableCell className="font-medium text-[var(--label-primary)] align-top">
+                                                        {displayName}
                                                         {lead.company_name && <div className="text-[11px] text-[var(--label-tertiary)] font-normal">{lead.company_name}</div>}
+                                                        {(lead.crm_name || lead.crm_id) && (
+                                                            <div className="text-[11px] text-[var(--label-tertiary)] font-normal mt-0.5">
+                                                                {lead.crm_name && <span>{lead.crm_name}</span>}
+                                                                {lead.crm_name && lead.crm_id && <span className="opacity-50"> · </span>}
+                                                                {lead.crm_id && <span className="font-mono">{lead.crm_id}</span>}
+                                                            </div>
+                                                        )}
                                                     </TableCell>
-                                                    <TableCell className="text-[var(--label-secondary)]">{lead.phone || "—"}</TableCell>
-                                                    <TableCell className="text-center">
+                                                    <TableCell className="align-top">
+                                                        {lead.module_name ? (
+                                                            <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "color-mix(in srgb, var(--indigo) 12%, transparent)", color: "var(--indigo)" }}>
+                                                                {lead.module_name}
+                                                            </span>
+                                                        ) : <span className="text-[var(--label-tertiary)]">—</span>}
+                                                    </TableCell>
+                                                    <TableCell className={`text-sm align-top ${lead.email === "No Email" ? "text-[var(--label-tertiary)] italic" : "text-[var(--label-secondary)]"}`}>
+                                                        {lead.email}
+                                                    </TableCell>
+                                                    <TableCell className="text-[var(--label-secondary)] text-sm align-top">{lead.phone || "—"}</TableCell>
+                                                    <TableCell className="align-top">
+                                                        <div className="flex flex-col gap-1">
+                                                            {lead.property_type && (
+                                                                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "color-mix(in srgb, var(--purple) 12%, transparent)", color: "var(--purple)", width: "fit-content" }}>{lead.property_type}</span>
+                                                            )}
+                                                            {lead.property_category && (
+                                                                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "color-mix(in srgb, var(--orange) 12%, transparent)", color: "var(--orange)", width: "fit-content" }}>{lead.property_category}</span>
+                                                            )}
+                                                            {!lead.property_type && !lead.property_category && <span className="text-[var(--label-tertiary)]">—</span>}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-center align-top">
                                                         <div className="flex flex-col items-center gap-1.5">
                                                             {lead.email && lead.email !== "No Email" && (
                                                                 <Badge variant="secondary" className="bg-[var(--blue)]/10 text-[var(--blue)] hover:bg-[var(--blue)]/10 border-[var(--blue)]/20 text-[12px] font-medium h-5 px-1.5 w-full justify-center gap-1"><Mail className="h-3 w-3" /> Email</Badge>
@@ -326,22 +363,20 @@ export default function LeadsPage() {
                                                             )}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className={`text-sm ${lead.email === "No Email" ? "text-[var(--label-tertiary)] italic" : "text-[var(--label-secondary)]"}`}>
-                                                        {lead.email}
-                                                    </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="align-top">
                                                         <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", background: "color-mix(in srgb, var(--blue) 12%, transparent)", color: "var(--blue)" }}>
                                                             {lead.lead_stage || lead.lead_status || "—"}
                                                         </span>
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="align-top">
                                                         <Badge variant={lead.replied === "Yes" ? "default" : "secondary"} className={lead.replied === "Yes" ? "bg-[var(--green)]/10 text-[var(--green)] border-[var(--green)]/20 shadow-none font-bold capitalize" : "capitalize text-[var(--label-secondary)] bg-[var(--fill-secondary)] border-[var(--glass-border)]"}>
                                                             {lead.replied === "Yes" ? "Replied" : "Sent"}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell><ProgressBreakdown lead={lead} /></TableCell>
+                                                    <TableCell className="align-top"><ProgressBreakdown lead={lead} /></TableCell>
                                                 </TableRow>
-                                            ))
+                                                );
+                                            })
                                         )}
                                     </TableBody>
                                 </Table>

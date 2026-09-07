@@ -109,6 +109,8 @@ export function normalizeOutreachRow(r: any): OutreachLead {
     return {
         lead_id: leadId,
         crm_id: r.crm_id ?? null,
+        crm_name: r.crm_name ?? null,
+        module_name: r.module_name ?? null,
         id: leadId,
 
         full_name: fullName,

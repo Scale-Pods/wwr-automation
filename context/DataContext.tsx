@@ -92,7 +92,6 @@ interface DataContextType {
     refreshMasterLeadsTotal: (params?: { from?: Date; to?: Date; force?: boolean }) => Promise<void>;
     voiceBalance: any;
     maqsamBalance: any;
-    twilioBalance: any;
     error: string | null;
     refreshLeads: (params?: { from?: Date; to?: Date; force?: boolean }) => Promise<void>;
     refreshCalls: (params?: { from?: Date; to?: Date; includeElevenLabs?: boolean; provider?: string; force?: boolean }) => Promise<void>;
@@ -125,7 +124,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const [loadingMasterLeadsTotal, setLoadingMasterLeadsTotal] = useState(true);
     const [voiceBalance, setVoiceBalance] = useState<any>(null);
     const [maqsamBalance, setMaqsamBalance] = useState<any>(null);
-    const [twilioBalance, setTwilioBalance] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
     // Gatekeepers to prevent redundant identical calls
@@ -359,14 +357,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     const fetchBalances = useCallback(async () => {
         try {
-            const [vapiRes, maqsamRes, twilioRes] = await Promise.all([
+            const [vapiRes, maqsamRes] = await Promise.all([
                 fetch('/api/vapi/balance'),
                 fetch('/api/maqsam/balance'),
-                fetch('/api/twilio/balance')
             ]);
             if (vapiRes.ok) setVoiceBalance(await vapiRes.json());
             if (maqsamRes.ok) setMaqsamBalance(await maqsamRes.json());
-            if (twilioRes.ok) setTwilioBalance(await twilioRes.json());
         } catch (err) { }
         finally { setLoadingBalances(false); }
     }, []);
@@ -481,7 +477,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             loadingMasterLeadsTotal,
             voiceBalance,
             maqsamBalance,
-            twilioBalance,
             error,
             refreshLeads: fetchLeads,
             refreshCalls: fetchCalls,

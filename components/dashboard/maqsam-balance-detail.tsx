@@ -42,8 +42,9 @@ export function MaqsamBalanceDetail({ initialBalance }: { initialBalance?: any }
             } else {
                 outbound += duration;
             }
-            // Use the specific telephony breakdown cost, fallback to costValue
-            totalCost += (call.breakdown?.telephony || call.costValue || 0);
+            // Telephony (carrier) spend only — breakdown.telephony is computed
+            // server-side from context/rates.json in /api/calls.
+            totalCost += (call.breakdown?.telephony ?? call.telephonyCost ?? 0);
         });
 
         const total = inbound + outbound;
