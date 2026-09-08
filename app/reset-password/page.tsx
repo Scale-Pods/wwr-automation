@@ -40,7 +40,7 @@ export default function ResetPasswordPage() {
     return (
         <div
             className="min-h-screen flex items-center justify-center p-6"
-            style={{ background: 'linear-height: 100vh; background: #131316' }}
+            style={{ background: '#131316' }}
         >
             {/* ambient glow */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -80,12 +80,12 @@ export default function ResetPasswordPage() {
                             >
                                 <div className="relative" style={{ width: '120px', height: '26px' }}>
                                     <Image
-                                        src="/logo.png"
+                                        src="/logo-full.png"
                                         alt="World Wide Real Estate"
                                         fill
+                                        sizes="120px"
                                         className="object-contain"
                                         priority
-                                        style={{ width: 'auto', height: 'auto' }}
                                     />
                                 </div>
                             </div>
