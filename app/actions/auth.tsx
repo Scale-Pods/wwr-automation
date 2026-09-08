@@ -76,8 +76,31 @@ export async function logout() {
     return { success: true };
 }
 
+function resolveAppUrl(originFromClient?: string | null): string {
+    const clean = (u: string) => u.replace(/\/$/, '');
+    const onVercel = !!process.env.VERCEL;
+    const isLocal = (u: string) => /^https?:\/\/(localhost|127\.0\.0\.1)/.test(u);
+
+    // 1. The browser's real origin from the form — always matches the deployment
+    //    the user is on. Trust it unless it's localhost while the server is on Vercel.
+    if (originFromClient && /^https?:\/\//.test(originFromClient) && !(isLocal(originFromClient) && onVercel)) {
+        return clean(originFromClient);
+    }
+
+    // 2. Explicit override (skip a stale localhost value when deployed).
+    const envUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (envUrl && !(isLocal(envUrl) && onVercel)) return clean(envUrl);
+
+    // 3. Vercel-provided host.
+    if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+
+    return 'http://localhost:3000';
+}
+
 export async function forgotPassword(prevState: any, formData: FormData) {
     const email = (formData.get('email') as string)?.toLowerCase().trim();
+    const origin = formData.get('origin') as string | null;
 
     if (!email) {
         return { error: 'Email is required' };
@@ -100,12 +123,7 @@ export async function forgotPassword(prevState: any, formData: FormData) {
                 password: crypto.randomUUID(),
             });
 
-            const appUrl = (
-                process.env.NEXT_PUBLIC_APP_URL
-                || (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
-                || (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`)
-                || 'http://localhost:3000'
-            ).replace(/\/$/, '');
+            const appUrl = resolveAppUrl(origin);
             const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
                 redirectTo: `${appUrl}/reset-password`,
             });

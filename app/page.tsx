@@ -6,17 +6,23 @@ import { ArrowRight, Mail, MessageCircle, Mic, Sparkles, Users, TrendingUp, Buil
 import { AuthForms } from "@/components/auth/auth-forms";
 
 export default function LandingPage() {
-    // A password-recovery link that lands here (Supabase Site URL fallback, or a
-    // stale bookmark) carries the token in the URL hash — forward it to the real
-    // reset page instead of showing the login form.
+    // A password-recovery link that lands here (Supabase falls back to Site URL
+    // when the link's redirect target isn't allow-listed, or from a stale email)
+    // still carries the token — in the URL hash or as a ?code= query param.
+    // Forward it to the real reset page instead of showing the login form.
     useEffect(() => {
-        const hash = window.location.hash;
-        if (!hash) return;
-        const params = new URLSearchParams(hash.slice(1));
-        const type = params.get("type");
-        const hasToken = params.get("access_token") || params.get("code");
-        if (type === "recovery" && hasToken) {
-            window.location.replace(`/reset-password${hash}`);
+        const { hash, search } = window.location;
+        const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+        const queryParams = new URLSearchParams(search);
+
+        const isRecovery =
+            hashParams.get("type") === "recovery" ||
+            queryParams.get("type") === "recovery";
+        const hasHashToken = !!hashParams.get("access_token");
+        const hasCode = !!queryParams.get("code");
+
+        if ((isRecovery && (hasHashToken || hasCode)) || (hasHashToken && hashParams.get("refresh_token"))) {
+            window.location.replace(`/reset-password${search}${hash}`);
         }
     }, []);
 

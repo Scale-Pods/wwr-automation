@@ -96,6 +96,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         document.documentElement.classList.add('dark');
     }, []);
 
+    // If a stale Supabase recovery link landed here with the token in the hash
+    // (logged-in user + Site-URL fallback), forward to the reset page.
+    useEffect(() => {
+        const h = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        if (h.get('type') === 'recovery' && h.get('access_token')) {
+            window.location.replace(`/reset-password${window.location.hash}`);
+        }
+    }, []);
+
     const { calls, voiceBalance, maqsamBalance, loadingBalances, loadingCalls } = useData();
 
     const walletChips = [

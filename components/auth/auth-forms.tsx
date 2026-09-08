@@ -106,7 +106,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                 </p>
                 <button
                     onClick={() => setMode('login')}
-                    style={{ fontSize: 13, fontWeight: 600, color: '#0A84FF', background: 'none', border: 'none', cursor: 'default' }}
+                    style={{ fontSize: 13, fontWeight: 600, color: '#0A84FF', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
                     Back to Login
                 </button>
@@ -144,6 +144,9 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
             )}
 
             <form action={mode === 'login' ? loginAction : forgotAction} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {mode === 'forgot' && (
+                    <input type="hidden" name="origin" value={typeof window !== 'undefined' ? window.location.origin : ''} />
+                )}
                 <div>
                     <label htmlFor="email" style={labelStyle}>Email Address</label>
                     <StyledInput id="email" name="email" type="email" placeholder="name@example.com" required />
@@ -158,7 +161,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                                 onClick={() => setMode('forgot')}
                                 style={{
                                     fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.30)',
-                                    background: 'none', border: 'none', cursor: 'default',
+                                    background: 'none', border: 'none', cursor: 'pointer',
                                     letterSpacing: '0.04em', textTransform: 'uppercase',
                                     transition: 'color 130ms ease',
                                 }}
@@ -185,7 +188,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                         color: '#ffffff',
                         background: isPending ? 'rgba(10,132,255,0.60)' : '#0A84FF',
                         border: 'none',
-                        cursor: isPending ? 'not-allowed' : 'default',
+                        cursor: isPending ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -214,7 +217,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                 <div style={{ textAlign: 'center', marginTop: 18 }}>
                     <button
                         onClick={() => setMode('login')}
-                        style={{ fontSize: 13, fontWeight: 600, color: '#0A84FF', background: 'none', border: 'none', cursor: 'default' }}
+                        style={{ fontSize: 13, fontWeight: 600, color: '#0A84FF', background: 'none', border: 'none', cursor: 'pointer' }}
                     >
                         Back to Login
                     </button>

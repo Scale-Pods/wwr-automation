@@ -6,7 +6,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-change-this';
 const secret = new TextEncoder().encode(JWT_SECRET);
 
 export async function proxy(request: NextRequest) {
-    const { pathname } = request.nextUrl;
+    const { pathname, searchParams } = request.nextUrl;
 
     // Skip static files, images, favicon, etc.
     if (
@@ -16,6 +16,19 @@ export async function proxy(request: NextRequest) {
         pathname.includes('.')
     ) {
         return NextResponse.next();
+    }
+
+    // A Supabase recovery link that fell back to the Site URL ("/") carries a
+    // ?code=… (PKCE) or type=recovery query. Send it straight to /reset-password
+    // before any auth redirect can bounce it to /dashboard or the login page.
+    if (
+        pathname !== '/reset-password' &&
+        (searchParams.get('type') === 'recovery' ||
+            (searchParams.has('code') && pathname === '/'))
+    ) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/reset-password';
+        return NextResponse.redirect(url);
     }
 
     const token = request.cookies.get('auth_token')?.value;
