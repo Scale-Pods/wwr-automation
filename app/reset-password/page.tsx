@@ -4,7 +4,6 @@ import { useState, useEffect, useActionState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
-import { Button } from '@/components/ui/button';
 import { Lock, ArrowRight, Loader2, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 import { resetPassword } from '@/app/actions/auth';
 
@@ -95,36 +94,26 @@ export default function ResetPasswordPage() {
                     <div className="absolute top-0 inset-x-0 h-px"
                         style={{ background: 'linear-gradient(90deg, transparent, rgba(10,132,255,0.5), transparent)' }} />
 
-                    <div className="p-8 pt-10 space-y-7">
+                    <div className="p-8 pt-9 space-y-7">
                         {/* Logo */}
                         <div className="flex justify-center">
-                            <div
-                                className="flex items-center justify-center rounded-2xl px-4"
-                                style={{
-                                    height: '40px',
-                                    background: 'rgba(255,255,255,0.96)',
-                                    border: '1px solid rgba(255,255,255,0.15)',
-                                    boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-                                }}
-                            >
-                                <div className="relative" style={{ width: '120px', height: '26px' }}>
-                                    <Image
-                                        src="/logo-full.png"
-                                        alt="World Wide Real Estate"
-                                        fill
-                                        sizes="120px"
-                                        className="object-contain"
-                                        priority
-                                    />
-                                </div>
+                            <div className="relative" style={{ width: 190, height: 44 }}>
+                                <Image
+                                    src="/logo.png"
+                                    alt="World Wide Real Estate"
+                                    fill
+                                    sizes="190px"
+                                    className="object-contain"
+                                    priority
+                                />
                             </div>
                         </div>
 
                         {/* ── Verifying link ── */}
                         {checking && !hashError && (
-                            <div className="flex flex-col items-center gap-3 py-8">
+                            <div className="flex flex-col items-center gap-3 py-10">
                                 <Loader2 className="h-7 w-7 animate-spin" style={{ color: 'rgba(235,235,245,0.45)' }} />
-                                <p className="text-sm" style={{ color: 'rgba(235,235,245,0.45)' }}>Verifying your reset link&hellip;</p>
+                                <p className="text-sm" style={{ color: 'rgba(235,235,245,0.55)' }}>Verifying your reset link&hellip;</p>
                             </div>
                         )}
 
@@ -138,7 +127,7 @@ export default function ResetPasswordPage() {
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <h1 className="text-2xl font-semibold" style={{ color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.022em' }}>
+                                    <h1 className="text-[22px] font-semibold leading-tight" style={{ color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.022em' }}>
                                         Link Invalid
                                     </h1>
                                     <p className="text-sm" style={{ color: 'rgba(235,235,245,0.55)' }}>{hashError}</p>
@@ -164,7 +153,7 @@ export default function ResetPasswordPage() {
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <h1 className="text-2xl font-semibold" style={{ color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.022em' }}>
+                                    <h1 className="text-[22px] font-semibold leading-tight" style={{ color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.022em' }}>
                                         Password Updated
                                     </h1>
                                     <p className="text-sm" style={{ color: 'rgba(235,235,245,0.55)' }}>{state.message}</p>
@@ -180,10 +169,10 @@ export default function ResetPasswordPage() {
                         {!checking && !hashError && !state?.success && (
                             <div className="space-y-6">
                                 <div className="space-y-1.5 text-center">
-                                    <h1 className="text-3xl font-semibold" style={{ color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.022em' }}>
+                                    <h1 className="text-[22px] font-semibold leading-tight" style={{ color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.02em' }}>
                                         Set New Password
                                     </h1>
-                                    <p className="text-sm" style={{ color: 'rgba(235,235,245,0.50)' }}>
+                                    <p className="text-[13px]" style={{ color: 'rgba(235,235,245,0.50)' }}>
                                         Choose a strong password for your account
                                     </p>
                                 </div>
@@ -306,24 +295,40 @@ export default function ResetPasswordPage() {
                                         </div>
                                     </div>
 
-                                    <div className="pt-1">
-                                        <Button
-                                            type="submit"
-                                            disabled={isPending || !accessToken}
-                                            className="w-full h-12 rounded-xl gap-2 text-sm font-semibold"
-                                            style={{ background: '#0A84FF', color: '#fff' }}
-                                        >
-                                            {isPending ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                                <>
-                                                    Update Password
-                                                    <ArrowRight className="h-4 w-4" />
-                                                </>
-                                            )}
-                                        </Button>
-                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={isPending || !accessToken}
+                                        className="w-full h-12 rounded-xl inline-flex items-center justify-center gap-2 text-sm font-semibold transition-opacity mt-2 disabled:cursor-not-allowed"
+                                        style={{
+                                            background: '#0A84FF',
+                                            color: '#fff',
+                                            opacity: isPending || !accessToken ? 0.6 : 1,
+                                            boxShadow: '0 2px 10px rgba(10,132,255,0.30)',
+                                        }}
+                                        onMouseEnter={e => { if (!isPending && accessToken) e.currentTarget.style.opacity = '0.9'; }}
+                                        onMouseLeave={e => { if (!isPending && accessToken) e.currentTarget.style.opacity = '1'; }}
+                                    >
+                                        {isPending ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                Update Password
+                                                <ArrowRight className="h-4 w-4" />
+                                            </>
+                                        )}
+                                    </button>
                                 </form>
+
+                                <button
+                                    type="button"
+                                    onClick={() => router.push('/')}
+                                    className="w-full text-center text-[13px] font-medium transition-colors"
+                                    style={{ color: 'rgba(235,235,245,0.45)', background: 'none', border: 'none', cursor: 'pointer' }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = '#0A84FF')}
+                                    onMouseLeave={e => (e.currentTarget.style.color = 'rgba(235,235,245,0.45)')}
+                                >
+                                    Back to Login
+                                </button>
                             </div>
                         )}
                     </div>
