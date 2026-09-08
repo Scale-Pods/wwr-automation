@@ -3,6 +3,7 @@
 import { useState, useEffect, useActionState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { createClient } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { Lock, ArrowRight, Loader2, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 import { resetPassword } from '@/app/actions/auth';
@@ -10,6 +11,7 @@ import { resetPassword } from '@/app/actions/auth';
 export default function ResetPasswordPage() {
     const [accessToken, setAccessToken] = useState<string | null>(null);
     const [hashError, setHashError] = useState<string | null>(null);
+    const [checking, setChecking] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const router = useRouter();
@@ -17,17 +19,44 @@ export default function ResetPasswordPage() {
     const [state, action, isPending] = useActionState(resetPassword, null as any);
 
     useEffect(() => {
-        const hash = window.location.hash.substring(1);
-        const params = new URLSearchParams(hash);
-        const type = params.get('type');
-        const token = params.get('access_token');
+        let cancelled = false;
+        const invalid = () => { if (!cancelled) { setHashError('Invalid or expired reset link. Please request a new one.'); setChecking(false); } };
 
-        if (!token || type !== 'recovery') {
-            setHashError('Invalid or expired reset link. Please request a new one.');
-        } else {
-            setAccessToken(token);
-            window.history.replaceState(null, '', window.location.pathname);
-        }
+        (async () => {
+            // Format A: token in the URL hash (#access_token=…&type=recovery) —
+            // Supabase's default {{ .ConfirmationURL }} template after /auth/v1/verify.
+            const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+            const hashToken = hashParams.get('access_token');
+            const hashType = hashParams.get('type');
+            if (hashToken && (hashType === 'recovery' || !hashType)) {
+                if (!cancelled) { setAccessToken(hashToken); setChecking(false); }
+                window.history.replaceState(null, '', window.location.pathname);
+                return;
+            }
+
+            // Format B: PKCE ?code=… in the query string — needs a session exchange.
+            const url = new URL(window.location.href);
+            const code = url.searchParams.get('code');
+            if (code) {
+                try {
+                    const supabase = createClient(
+                        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                    );
+                    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+                    if (error || !data.session?.access_token) return invalid();
+                    if (!cancelled) { setAccessToken(data.session.access_token); setChecking(false); }
+                    window.history.replaceState(null, '', window.location.pathname);
+                    return;
+                } catch {
+                    return invalid();
+                }
+            }
+
+            invalid();
+        })();
+
+        return () => { cancelled = true; };
     }, []);
 
     useEffect(() => {
@@ -91,8 +120,16 @@ export default function ResetPasswordPage() {
                             </div>
                         </div>
 
+                        {/* ── Verifying link ── */}
+                        {checking && !hashError && (
+                            <div className="flex flex-col items-center gap-3 py-8">
+                                <Loader2 className="h-7 w-7 animate-spin" style={{ color: 'rgba(235,235,245,0.45)' }} />
+                                <p className="text-sm" style={{ color: 'rgba(235,235,245,0.45)' }}>Verifying your reset link&hellip;</p>
+                            </div>
+                        )}
+
                         {/* ── Invalid link state ── */}
-                        {hashError && (
+                        {!checking && hashError && (
                             <div className="space-y-6 text-center py-2">
                                 <div className="flex justify-center">
                                     <div className="h-16 w-16 rounded-full flex items-center justify-center"
@@ -118,7 +155,7 @@ export default function ResetPasswordPage() {
                         )}
 
                         {/* ── Success state ── */}
-                        {!hashError && state?.success && (
+                        {!checking && !hashError && state?.success && (
                             <div className="space-y-6 text-center py-2">
                                 <div className="flex justify-center">
                                     <div className="h-16 w-16 rounded-full flex items-center justify-center"
@@ -140,7 +177,7 @@ export default function ResetPasswordPage() {
                         )}
 
                         {/* ── Form state ── */}
-                        {!hashError && !state?.success && (
+                        {!checking && !hashError && !state?.success && (
                             <div className="space-y-6">
                                 <div className="space-y-1.5 text-center">
                                     <h1 className="text-3xl font-semibold" style={{ color: 'rgba(255,255,255,0.92)', letterSpacing: '-0.022em' }}>

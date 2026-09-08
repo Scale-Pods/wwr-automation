@@ -1,11 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 import Image from "next/image";
 import { ArrowRight, Mail, MessageCircle, Mic, Sparkles, Users, TrendingUp, Building2 } from "lucide-react";
 import { AuthForms } from "@/components/auth/auth-forms";
 
 export default function LandingPage() {
+    // A password-recovery link that lands here (Supabase Site URL fallback, or a
+    // stale bookmark) carries the token in the URL hash — forward it to the real
+    // reset page instead of showing the login form.
+    useEffect(() => {
+        const hash = window.location.hash;
+        if (!hash) return;
+        const params = new URLSearchParams(hash.slice(1));
+        const type = params.get("type");
+        const hasToken = params.get("access_token") || params.get("code");
+        if (type === "recovery" && hasToken) {
+            window.location.replace(`/reset-password${hash}`);
+        }
+    }, []);
 
     return (
         <div
