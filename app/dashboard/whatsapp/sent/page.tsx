@@ -1,136 +1,169 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Send, CheckCheck, Clock, XCircle, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { useState, useEffect } from "react";
-import { subDays } from "date-fns";
+import { useState, useEffect, useMemo } from "react";
+import { subDays, startOfDay, endOfDay } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { useData } from "@/context/DataContext";
 import { coerceTimestamp } from "@/lib/outreach-types";
-import type { OutreachLead } from "@/lib/outreach-types";
+
+type Row = {
+    id: string;
+    recipient: string;
+    phone: string;
+    message: string;
+    status: "Sent" | "Delivered" | "Read" | "Failed";
+    time: string;
+    rawDate: number | null;
+};
 
 export default function WhatsappSentPage() {
-    const { leads: allLeads, loadingLeads } = useData();
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
-    const [messages, setMessages] = useState<any[]>([]);
-    const loading = loadingLeads;
+    const [leads, setLeads] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
-    const [stats, setStats] = useState({ total: 0, delivered: 0, read: 0, failed: 0 });
 
     useEffect(() => {
-        if (loadingLeads) return;
+        if (!dateRange?.from) return;
+        setLoading(true);
+        fetch(`/api/whatsapp-leads`)
+            .then(r => (r.ok ? r.json() : { leads: [] }))
+            .then(d => setLeads(d.leads || d.nr_wf || []))
+            .catch(() => setLeads([]))
+            .finally(() => setLoading(false));
+    }, [dateRange]);
 
-        const from = dateRange?.from ? new Date(dateRange.from) : null;
-        const to = dateRange?.to ? new Date(dateRange.to) : from;
-        if (from) from.setHours(0, 0, 0, 0);
-        if (to) to.setHours(23, 59, 59, 999);
-        const inRange = (d: Date | null) => { if (!from || !to) return true; if (!d) return false; return d >= from && d <= to; };
+    const { rows, stats } = useMemo(() => {
+        const from = dateRange?.from ? startOfDay(new Date(dateRange.from)).getTime() : null;
+        const to = endOfDay(new Date(dateRange?.to || dateRange?.from || new Date())).getTime();
+        const inRange = (t: number | null) => !from || (t != null && t >= from && t <= to);
 
-        const rows: any[] = [];
-        let delivered = 0, read = 0, failed = 0;
+        const out: Row[] = [];
+        let delivered = 0, read = 0, failed = 0, sent = 0;
 
-        (allLeads as OutreachLead[]).forEach(lead => {
-            lead.wa_slots.forEach(slot => {
-                if (!slot.message && !slot.sent_at && !slot.status) return;
-                const ts = coerceTimestamp(slot.sent_at) || lead.created_at || null;
-                if (!inRange(ts ? new Date(ts) : null)) return;
+        leads.forEach(lead => {
+            const name = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.phone || "Unknown";
+            for (let n = 1; n <= 4; n++) {
+                const message = lead[`wa_${n}`];
+                const status = lead[`wa_${n}_status`];
+                const sentAtRaw = lead[`wa_${n}_sent_at`];
+                if (!message && !status && !sentAtRaw) continue;
 
-                const statusRaw = String(slot.status || "").toLowerCase();
-                let status = "Sent";
-                if (statusRaw.includes("read")) { status = "Read"; read++; }
-                else if (statusRaw.includes("deliver")) { status = "Delivered"; delivered++; }
-                else if (statusRaw.includes("fail")) { status = "Failed"; failed++; }
-                else { delivered++; }
+                const iso = coerceTimestamp(sentAtRaw) || coerceTimestamp(lead.wa_1_sent_at) || lead.created_at || null;
+                const t = iso ? new Date(iso).getTime() : null;
+                if (!inRange(t)) continue;
 
-                rows.push({
-                    id: `${lead.lead_id}-wa-${slot.n}`,
-                    recipient: lead.name || lead.phone || "Unknown",
-                    message: slot.message || `WhatsApp message ${slot.n}`,
-                    status,
-                    time: ts ? new Date(ts).toLocaleString() : "Unknown",
-                    rawDate: ts,
+                const s = String(status || "").toLowerCase();
+                let label: Row["status"] = "Sent";
+                if (s.includes("read")) { label = "Read"; read++; }
+                else if (s.includes("deliver")) { label = "Delivered"; delivered++; }
+                else if (s.includes("fail")) { label = "Failed"; failed++; }
+                else { label = "Sent"; sent++; }
+
+                out.push({
+                    id: `${lead.lead_id || lead.crm_id}-wa-${n}`,
+                    recipient: name,
+                    phone: lead.phone || "",
+                    message: message ? String(message) : `WhatsApp message ${n}`,
+                    status: label,
+                    time: t ? new Date(t).toLocaleString([], { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—",
+                    rawDate: t,
                 });
-            });
+            }
         });
 
-        rows.sort((a, b) => new Date(b.rawDate || 0).getTime() - new Date(a.rawDate || 0).getTime());
-        setMessages(rows);
-        setStats({ total: rows.length, delivered, read, failed });
-    }, [dateRange, allLeads, loadingLeads]);
+        out.sort((a, b) => (b.rawDate || 0) - (a.rawDate || 0));
+        return { rows: out, stats: { total: out.length, delivered, read, failed, sent } };
+    }, [leads, dateRange]);
 
-    const filteredMessages = messages.filter(msg =>
-        msg.recipient.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        msg.message.toLowerCase().includes(searchQuery.toLowerCase())
+    const filtered = rows.filter(r =>
+        r.recipient.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.phone.includes(searchQuery) ||
+        r.message.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    if (loading) return <WorldWideLoader />;
-
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="space-y-5 pb-10 relative min-h-[500px]">
+            {loading && <WorldWideLoader />}
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold">Total Sent Messages</h1>
-                    <p className="text-slate-500">History of all outbound WhatsApp communications</p>
+                    <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "var(--ls-heading)", color: "var(--label-primary)" }}>Sent WhatsApp Messages</h1>
+                    <p style={{ fontSize: 13, color: "var(--label-secondary)", marginTop: 2 }}>History of all outbound WhatsApp communications</p>
                 </div>
                 <DateRangePicker onUpdate={(val) => setDateRange(val.range)} />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <StatCard title="Total Sent" value={stats.total.toLocaleString()} icon={<Send className="h-4 w-4" />} color="text-blue-600" bg="bg-blue-50" />
-                <StatCard title="Delivered" value={stats.delivered.toLocaleString()} icon={<CheckCheck className="h-4 w-4" />} color="text-emerald-600" bg="bg-emerald-50" />
-                <StatCard title="Read" value={stats.read.toLocaleString()} icon={<CheckCheck className="h-4 w-4 text-blue-500" />} color="text-amber-600" bg="bg-amber-50" />
-                <StatCard title="Failed" value={stats.failed.toLocaleString()} icon={<XCircle className="h-4 w-4" />} color="text-rose-600" bg="bg-rose-50" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard title="Total Sent" value={loading ? "…" : stats.total.toLocaleString()} icon={Send} color="var(--blue)" />
+                <StatCard title="Delivered" value={loading ? "…" : stats.delivered.toLocaleString()} icon={CheckCheck} color="var(--green)" />
+                <StatCard title="Read" value={loading ? "…" : stats.read.toLocaleString()} icon={CheckCheck} color="var(--purple)" />
+                <StatCard title="Failed" value={loading ? "…" : stats.failed.toLocaleString()} icon={XCircle} color="var(--red)" />
             </div>
 
-            <Card className="border-slate-200">
-                <CardHeader className="border-b border-slate-100 flex flex-row items-center justify-between py-4">
-                    <CardTitle className="text-lg">Message History</CardTitle>
-                    <div className="relative w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <Input className="pl-10 h-9" placeholder="Search recipients..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0 relative min-h-[300px]">
-                    <div className="divide-y divide-slate-100">
-                        {filteredMessages.length > 0 ? filteredMessages.map(msg => (
-                            <div key={msg.id} className="p-4 hover:bg-slate-50 transition-colors flex items-start justify-between">
-                                <div className="space-y-1">
-                                    <p className="font-bold text-slate-950">{msg.recipient}</p>
-                                    <p className="text-sm text-slate-600 max-w-xl">{msg.message}</p>
-                                    <div className="flex items-center gap-3 mt-2">
-                                        <span className="text-[10px] text-slate-400 uppercase font-bold">{msg.time}</span>
-                                        <span className={`flex items-center gap-1 text-[10px] font-bold uppercase ${msg.status === "Read" ? "text-blue-500" : msg.status === "Delivered" ? "text-emerald-500" : msg.status === "Failed" ? "text-rose-500" : "text-slate-400"}`}>
-                                            {(msg.status === "Read" || msg.status === "Delivered") && <CheckCheck className="h-3 w-3" />}
-                                            {msg.status === "Sent" && <Clock className="h-3 w-3" />}
-                                            {msg.status === "Failed" && <XCircle className="h-3 w-3" />}
-                                            {msg.status}
-                                        </span>
+            <div style={{ position: "relative" }}>
+                <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "var(--label-tertiary)" }} />
+                <Input className="pl-10" style={{ background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)", borderRadius: "var(--radius-lg)" }} placeholder="Search recipient, phone, or message…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
+
+            <div className="liquid-card" style={{ padding: 0, overflow: "hidden" }}>
+                <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--fill-quaternary)" }}>
+                    <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--label-primary)" }}>Message History</h2>
+                </div>
+                <div style={{ position: "relative", minHeight: 200 }}>
+                    {!loading && filtered.length === 0 ? (
+                        <div style={{ padding: "48px 16px", textAlign: "center", color: "var(--label-tertiary)", fontSize: 13 }}>No messages found for this range.</div>
+                    ) : (
+                        <div className="divide-y" style={{ borderColor: "var(--hairline)" }}>
+                            {filtered.map(msg => (
+                                <div key={msg.id} style={{ padding: "12px 16px", display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 10, borderBottom: "1px solid var(--hairline)" }}>
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--label-primary)" }}>{msg.recipient}</span>
+                                            {msg.phone && <span style={{ fontSize: 11, color: "var(--label-tertiary)", fontFamily: "ui-monospace, monospace" }}>{msg.phone}</span>}
+                                        </div>
+                                        <p style={{ fontSize: 12, color: "var(--label-secondary)", marginTop: 3, whiteSpace: "pre-wrap", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{msg.message}</p>
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                                        <StatusPill status={msg.status} />
+                                        <span style={{ fontSize: 10, color: "var(--label-tertiary)" }}>{msg.time}</span>
                                     </div>
                                 </div>
-                            </div>
-                        )) : (
-                            <div className="p-12 text-center text-slate-400">No messages found.</div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
 
-function StatCard({ title, value, icon, color, bg }: any) {
+function StatCard({ title, value, icon: Icon, color }: any) {
     return (
-        <Card className="border-slate-200">
-            <CardContent className="p-4 flex items-center gap-4">
-                <div className={`p-3 rounded-lg ${bg} ${color}`}>{icon}</div>
-                <div>
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{title}</p>
-                    <p className="text-xl font-bold text-slate-900">{value}</p>
-                </div>
-            </CardContent>
-        </Card>
+        <div className="liquid-card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "var(--radius-md)", background: `color-mix(in srgb, ${color} 12%, transparent)`, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon style={{ width: 14, height: 14 }} />
+            </div>
+            <div>
+                <p style={{ fontSize: 10, fontWeight: 700, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{title}</p>
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "var(--label-primary)", letterSpacing: "var(--ls-metric)", lineHeight: 1.1 }}>{value}</h3>
+            </div>
+        </div>
+    );
+}
+
+function StatusPill({ status }: { status: "Sent" | "Delivered" | "Read" | "Failed" }) {
+    const map = {
+        Sent: { bg: "var(--fill-secondary)", color: "var(--label-tertiary)", Icon: Clock },
+        Delivered: { bg: "rgba(48,209,88,0.12)", color: "var(--green)", Icon: CheckCheck },
+        Read: { bg: "rgba(10,132,255,0.12)", color: "var(--blue)", Icon: CheckCheck },
+        Failed: { bg: "rgba(255,69,58,0.12)", color: "var(--red)", Icon: XCircle },
+    }[status];
+    const { Icon } = map;
+    return (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", background: map.bg, color: map.color }}>
+            <Icon style={{ width: 10, height: 10 }} /> {status}
+        </span>
     );
 }

@@ -176,6 +176,61 @@ export function parseJsonArray(raw: any): any[] {
     return [];
 }
 
+const OUTBOUND_ROLES = new Set(['assistant', 'bot', 'agent', 'system', 'ai', 'b2b_ai']);
+const INBOUND_ROLES = new Set(['user', 'customer', 'client', 'lead', 'contact', 'human']);
+
+/** Is one whatsapp_conversation / email_conversation entry an outbound (our-side) message? */
+export function isOutboundMessage(m: any): boolean {
+    const r = String(m?.role ?? m?.type ?? m?.sender ?? m?.direction ?? '').toLowerCase();
+    if (OUTBOUND_ROLES.has(r)) return true;
+    if (INBOUND_ROLES.has(r)) return false;
+    // No usable role — the pipeline always stamps role:assistant on our side,
+    // so an unlabelled entry is treated as inbound.
+    return false;
+}
+
+export function isInboundMessage(m: any): boolean {
+    const r = String(m?.role ?? m?.type ?? m?.sender ?? m?.direction ?? '').toLowerCase();
+    if (INBOUND_ROLES.has(r)) return true;
+    if (OUTBOUND_ROLES.has(r)) return false;
+    return !r; // unlabelled → inbound
+}
+
+/**
+ * Count of outbound WhatsApp messages for one outreach_table row.
+ * The number of outbound bubbles in whatsapp_conversation, but never less than
+ * the count of populated wa_1..wa_3 slots (a lead that was messaged always
+ * counts at least those sends, even if the conversation only stored replies).
+ */
+export function waMessagesSent(row: any): number {
+    const outbound = parseJsonArray(row?.whatsapp_conversation).filter(isOutboundMessage).length;
+    let slots = 0;
+    for (let n = 1; n <= 4; n++) if (row?.[`wa_${n}`]) slots++;
+    return Math.max(outbound, slots);
+}
+
+/**
+ * The wa_1..wa_3 slots that are a genuine outbound send: wa_N is not null AND
+ * wa_N_status is "sent". Returns the slot metadata (with its sent_at) so callers
+ * can date-scope on wa_N_sent_at.
+ */
+export function waSentSlots(row: any): { n: number; message: string; status: string; sent_at: string | null }[] {
+    const out: { n: number; message: string; status: string; sent_at: string | null }[] = [];
+    for (let n = 1; n <= 3; n++) {
+        const message = row?.[`wa_${n}`];
+        const status = String(row?.[`wa_${n}_status`] ?? '').trim().toLowerCase();
+        if (message != null && String(message).trim() !== '' && status === 'sent') {
+            out.push({ n, message: String(message), status: 'sent', sent_at: row?.[`wa_${n}_sent_at`] ?? null });
+        }
+    }
+    return out;
+}
+
+/** True when a lead has at least one wa_1..wa_3 slot that was actually sent. */
+export function hasWaSend(row: any): boolean {
+    return waSentSlots(row).length > 0;
+}
+
 export function parseJsonObject(raw: any): Record<string, any> | null {
     if (!raw) return null;
     let parsed = raw;
@@ -188,7 +243,26 @@ export function parseJsonObject(raw: any): Record<string, any> | null {
     return null;
 }
 
-/** Pull a usable timestamp out of a `_sent_at` column or an email JSON object. */
+/**
+ * Parse a "DD/MM/YYYY HH:MM[:SS]" or "DD-MM-YYYY HH:MM[:SS]" string (optionally
+ * with a comma after the date). These come from the WhatsApp pipeline's
+ * `wa_N_sent_at` columns and `qatar_timestamp` fields, and are Asia/Qatar local
+ * time (UTC+03:00, no DST). Returns an ISO string, or null if it doesn't match.
+ */
+export function parseQatarDateTime(v: any): string | null {
+    if (!v) return null;
+    const m = String(v).trim().match(
+        /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:,)?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/
+    );
+    if (!m) return null;
+    const [, dd, mm, yyyy, hh, min, ss] = m;
+    const iso = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}T` +
+        `${hh.padStart(2, '0')}:${min}:${(ss ?? '00').padStart(2, '0')}+03:00`;
+    return isNaN(new Date(iso).getTime()) ? null : iso;
+}
+
+/** Pull a usable timestamp out of a `_sent_at` column, a JSON message, or a
+ *  "DD/MM/YYYY HH:MM" pipeline string. Returns an ISO string or null. */
 export function coerceTimestamp(v: any): string | null {
     if (!v) return null;
     const s = String(v).trim();
@@ -196,8 +270,16 @@ export function coerceTimestamp(v: any): string | null {
     // "SENT | 2026-06-29T18:24:50.000Z"
     if (s.includes('|')) {
         const part = s.split('|').pop()?.trim();
-        if (part && !isNaN(new Date(part).getTime())) return part;
+        if (part) {
+            const q = parseQatarDateTime(part);
+            if (q) return q;
+            if (!isNaN(new Date(part).getTime())) return part;
+        }
     }
+    // "08/09/2026 17:22" / "08/09/2026, 17:12:08" — try this BEFORE Date() so
+    // it isn't mis-parsed as MM/DD.
+    const q = parseQatarDateTime(s);
+    if (q) return q;
     if (!isNaN(new Date(s).getTime())) return s;
     return null;
 }

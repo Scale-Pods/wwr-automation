@@ -10,20 +10,14 @@ import {
 } from "recharts";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
-import { isReplyTrackPositive, coerceTimestamp } from "@/lib/outreach-types";
+import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent } from "@/lib/outreach-types";
 
 function waActivity(lead: any) {
-    let sent = 0;
-    for (let n = 1; n <= 4; n++) if (lead[`wa_${n}`]) sent++;
-    const conv = Array.isArray(lead.whatsapp_conversation) ? lead.whatsapp_conversation : [];
-    const convSent = conv.filter((m: any) => {
-        const r = m?.role || m?.type || m?.sender;
-        return r === "assistant" || r === "bot" || r === "agent";
-    }).length;
-    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) ||
-        conv.some((m: any) => { const r = m?.role || m?.type || m?.sender; return r === "user" || r === "User" || r === "customer"; });
+    const conv = parseJsonArray(lead.whatsapp_conversation);
+    const sent = waMessagesSent(lead);
+    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
     const lastDate = coerceTimestamp(lead.wa_1_sent_at) || lead.last_activity || lead.created_at || null;
-    return { sent: convSent || sent, replied, lastDate };
+    return { sent, replied, lastDate };
 }
 
 /* ── Apple Metric Tile ── */

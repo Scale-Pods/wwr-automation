@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { subDays, format } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useData } from "@/context/DataContext";
+import { coerceTimestamp } from "@/lib/outreach-types";
 
 /* ── Custom Tooltip for Recharts ── */
 function AppleTooltip({ active, payload, label }: any) {
@@ -134,11 +135,27 @@ export default function MasterDashboard() {
             totalEmailsSent += (lead.email_slots || []).length;
             if (lead.email_replied) totalEmailReplies++;
 
-            // WhatsApp reachouts — any wa_N slot or a conversation
-            const hasWa = (lead.wa_slots || []).length > 0 ||
-                (Array.isArray(lead.whatsapp_conversation) && lead.whatsapp_conversation.length > 0);
-            if (hasWa) totalWaReachouts++;
-            if (lead.whatsapp_replied) totalWaReplies++;
+            // WhatsApp reachouts — a lead counts only when it has a real send:
+            // wa_N is not null AND wa_N_status === "sent", for any of wa_1..wa_3.
+            // Date-scoped on the earliest such wa_N_sent_at (Qatar "DD/MM/YYYY HH:MM").
+            const sentSlots = (lead.wa_slots || []).filter(
+                (s: any) => s.n <= 3 && s.message != null && String(s.message).trim() !== '' &&
+                    String(s.status ?? '').trim().toLowerCase() === 'sent'
+            );
+            if (sentSlots.length > 0) {
+                const slotTimes = sentSlots
+                    .map((s: any) => coerceTimestamp(s.sent_at))
+                    .filter(Boolean)
+                    .map((iso: string) => new Date(iso).getTime());
+                const waRefMs = slotTimes.length ? Math.min(...slotTimes) : null;
+                const waRef = waRefMs != null
+                    ? new Date(waRefMs).toISOString()
+                    : (coerceTimestamp(lead.last_activity) || lead.created_at);
+                if (inRange(waRef)) {
+                    totalWaReachouts++;
+                    if (lead.whatsapp_replied) totalWaReplies++;
+                }
+            }
         });
 
         // Voice calls from vapi_call_logs (already date-scoped by refreshCalls)

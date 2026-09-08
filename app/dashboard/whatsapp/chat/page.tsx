@@ -11,7 +11,7 @@ import { Search, Filter, Users, Send, MessageSquare, RefreshCw, ChevronLeft, Che
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays, startOfDay, endOfDay } from "date-fns";
-import { isReplyTrackPositive, coerceTimestamp, parseJsonArray } from "@/lib/outreach-types";
+import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent } from "@/lib/outreach-types";
 
 // ── one lead's WhatsApp signals from outreach_table ──────────────────────────
 function waSignals(lead: any) {
@@ -23,11 +23,10 @@ function waSignals(lead: any) {
         const sent_at = lead[`wa_${n}_sent_at`] ?? null;
         if (message || status || sent_at) slotMsgs.push({ n, message, status, sent_at });
     }
-    const botCount = conv.length
-        ? conv.filter((m: any) => { const r = m?.role || m?.type || m?.sender; return r === "assistant" || r === "bot" || r === "agent"; }).length
-        : slotMsgs.length;
-    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) ||
-        conv.some((m: any) => { const r = m?.role || m?.type || m?.sender; return r === "user" || r === "User" || r === "customer"; });
+    // "Messages Sent" = outbound bubbles in the conversation, floored at the
+    // number of populated wa_N slots (shared helper — same everywhere).
+    const botCount = waMessagesSent(lead);
+    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
     const failedCount = slotMsgs.filter(s => String(s.status || "").toLowerCase().includes("fail")).length;
     const lastDate = coerceTimestamp(lead.wa_1_sent_at) || lead.last_activity || lead.created_at || null;
     const msgCount = conv.length || slotMsgs.length;

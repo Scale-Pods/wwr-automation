@@ -4,7 +4,7 @@ import { useState, useEffect, useContext } from "react";
 import { RefreshCw, MessageSquare, User, Bot, Link as LinkIcon, Check, Languages } from "lucide-react";
 import { ConsolidatedLead } from "@/lib/leads-utils";
 import { DataContext } from "@/context/DataContext";
-import { parseJsonArray, coerceTimestamp } from "@/lib/outreach-types";
+import { parseJsonArray, coerceTimestamp, parseQatarDateTime } from "@/lib/outreach-types";
 
 interface WhatsAppChatDetailProps {
     customerId: string;
@@ -92,6 +92,9 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                 phone: found.phone || "",
                 email: found.email || "",
                 stage: found.lead_stage || found.lead_status || "—",
+                // May live on the row or, for a leads-utils normalized lead, on .raw
+                wa_sentiment: found.wa_sentiment ?? found.raw?.wa_sentiment ?? null,
+                wa_note: found.wa_note ?? found.raw?.wa_note ?? null,
             };
             setLead(normalized);
 
@@ -104,7 +107,9 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                     const role = msg?.role || msg?.type || msg?.sender || "";
                     const isUser = role === "user" || role === "User" || role === "customer";
                     const content = msg.message || msg.content || msg.text || "";
-                    const date = coerceTimestamp(msg.timestamp || msg.date || msg.created_at);
+                    // Structured ISO `date` first, then the "DD/MM/YYYY HH:MM" qatar_timestamp.
+                    const date = coerceTimestamp(msg.date || msg.timestamp || msg.created_at || msg.sent_at)
+                        || parseQatarDateTime(msg.qatar_timestamp);
                     const agentLabel = msg.agent || (isUser ? "customer" : "bot");
                     const label = isUser ? "User" : (agentLabel === "b2b_ai" ? "AI Agent" : "Bot");
                     if (content && String(content).trim()) {
@@ -119,6 +124,14 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                         });
                     }
                 });
+                // Order by timestamp so bot/user interleave correctly even if the
+                // stored array isn't perfectly sorted.
+                timeline.sort((a, b) => {
+                    const ta = a.date ? new Date(a.date).getTime() : 0;
+                    const tb = b.date ? new Date(b.date).getTime() : 0;
+                    return ta - tb;
+                });
+                timeline.forEach((m, i) => { m.sequence = i + 1; });
             }
 
             // Fallback: build from wa_1..wa_4 columns
@@ -274,33 +287,56 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                     <StatBox label="Incoming" value={messages.filter((m: any) => m.type === "user").length} icon={User} color="var(--green)" />
                     <StatBox label="Outgoing" value={messages.filter((m: any) => m.type === "bot").length} icon={Bot} color="var(--purple)" />
 
-                    <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--label-tertiary)", margin: "8px 0 0" }}>Lead Info</p>
-                    <div style={{ background: "var(--fill-quaternary)", border: "1px solid var(--hairline)", borderRadius: 9, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--label-tertiary)", margin: "8px 0 0" }}>WhatsApp Insight</p>
+                    <div style={{ background: "var(--fill-quaternary)", border: "1px solid var(--hairline)", borderRadius: 9, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
                         <div>
-                            <span style={{ fontSize: 10, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Phone</span>
-                            <p style={{ fontSize: 12, fontWeight: 500, color: "var(--label-primary)", margin: "2px 0 0", fontFamily: "ui-monospace, monospace" }}>{lead.phone}</p>
+                            <span style={{ fontSize: 10, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Sentiment</span>
+                            {lead.wa_sentiment ? (
+                                <div style={{ marginTop: 4 }}>
+                                    <span style={{
+                                        display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 20,
+                                        fontSize: 11, fontWeight: 700, textTransform: "capitalize",
+                                        ...sentimentStyle(lead.wa_sentiment),
+                                    }}>{lead.wa_sentiment}</span>
+                                </div>
+                            ) : (
+                                <p style={{ fontSize: 12, color: "var(--label-tertiary)", margin: "2px 0 0" }}>—</p>
+                            )}
                         </div>
-                        {lead.email && lead.email !== "-" && lead.email !== "No Email" && (
-                            <div>
-                                <span style={{ fontSize: 10, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email</span>
-                                <p style={{ fontSize: 12, fontWeight: 500, color: "var(--label-primary)", margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.email}</p>
-                            </div>
-                        )}
                         <div>
-                            <span style={{ fontSize: 10, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Stage</span>
-                            <p style={{ fontSize: 12, fontWeight: 500, color: "var(--label-primary)", margin: "2px 0 0", textTransform: "capitalize" }}>{lead.stage}</p>
+                            <span style={{ fontSize: 10, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Note</span>
+                            {lead.wa_note ? (
+                                <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 4 }}>
+                                    {String(lead.wa_note).split("|").map((part: string, i: number) => {
+                                        const t = part.trim();
+                                        if (!t) return null;
+                                        return (
+                                            <p key={i} style={{ fontSize: 11, lineHeight: 1.45, color: "var(--label-secondary)", margin: 0, whiteSpace: "pre-wrap" }}>
+                                                {t}
+                                            </p>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <p style={{ fontSize: 12, color: "var(--label-tertiary)", margin: "2px 0 0" }}>—</p>
+                            )}
                         </div>
-                        {lead.wa_sentiment && (
-                            <div>
-                                <span style={{ fontSize: 10, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Sentiment</span>
-                                <p style={{ fontSize: 12, fontWeight: 500, color: "var(--label-primary)", margin: "2px 0 0", textTransform: "capitalize" }}>{lead.wa_sentiment}</p>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
         </div>
     );
+}
+
+function sentimentStyle(raw: string): { background: string; color: string } {
+    const s = String(raw).toLowerCase();
+    if (s.includes("hot") || s.includes("positive") || s.includes("warm") || s.includes("interest"))
+        return { background: "rgba(48,209,88,0.14)", color: "var(--green)" };
+    if (s.includes("cold") || s.includes("negative") || s.includes("angry") || s.includes("frustrat"))
+        return { background: "rgba(255,69,58,0.12)", color: "var(--red)" };
+    if (s.includes("neutral"))
+        return { background: "rgba(10,132,255,0.12)", color: "var(--blue)" };
+    return { background: "var(--fill-secondary)", color: "var(--label-secondary)" };
 }
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: number; icon: any; color: string }) {

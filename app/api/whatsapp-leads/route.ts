@@ -3,14 +3,6 @@ import { OUTREACH_TABLE } from '@/lib/outreach-types';
 
 export const dynamic = 'force-dynamic';
 
-function endOfDay(iso: string): string {
-    const d = new Date(iso);
-    if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) {
-        d.setUTCHours(23, 59, 59, 999);
-    }
-    return d.toISOString();
-}
-
 const PAGE = 1000;
 async function fetchAllPages(baseUrl: string, headers: Record<string, string>) {
     const rows: any[] = [];
@@ -27,19 +19,12 @@ async function fetchAllPages(baseUrl: string, headers: Record<string, string>) {
     return rows;
 }
 
-export async function GET(req: Request) {
-    const { searchParams } = new URL(req.url);
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-
+export async function GET() {
     const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/$/, '');
     const secretKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
     if (!supabaseUrl || !secretKey) {
         return NextResponse.json({ error: 'Config missing' }, { status: 500 });
     }
-
-    const fromISO = from || new Date(Date.now() - 90 * 86400000).toISOString();
-    const toISO = to ? endOfDay(to) : endOfDay(new Date().toISOString());
 
     const headers: Record<string, string> = {
         apikey: secretKey,
@@ -54,21 +39,20 @@ export async function GET(req: Request) {
     // since only a handful of fields are read downstream.
     const cols = '*';
 
+    // The pipeline stores wa_1_sent_at as free-text "DD/MM/YYYY HH:MM" (Qatar
+    // local), so a Postgres range query on it isn't possible — the caller filters
+    // by wa_1_sent_at client-side using coerceTimestamp(). Here we just return
+    // every lead with WhatsApp activity.
     try {
-        // A lead "has WhatsApp activity" if wa_1 is set OR the conversation jsonb is non-empty.
         const [waLeads, convLeads] = await Promise.all([
             fetchAllPages(
                 `${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${encodeURIComponent(cols)}` +
-                `&wa_1=not.is.null` +
-                `&created_at=gte.${encodeURIComponent(fromISO)}&created_at=lte.${encodeURIComponent(toISO)}` +
-                `&order=created_at.desc`,
+                `&wa_1=not.is.null&order=created_at.desc`,
                 headers
             ).catch(() => [] as any[]),
             fetchAllPages(
                 `${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${encodeURIComponent(cols)}` +
-                `&whatsapp_conversation=not.is.null` +
-                `&created_at=gte.${encodeURIComponent(fromISO)}&created_at=lte.${encodeURIComponent(toISO)}` +
-                `&order=created_at.desc`,
+                `&whatsapp_conversation=not.is.null&order=created_at.desc`,
                 headers
             ).catch(() => [] as any[]),
         ]);

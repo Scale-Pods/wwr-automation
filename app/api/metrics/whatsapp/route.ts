@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { OUTREACH_TABLE, isReplyTrackPositive, coerceTimestamp } from '@/lib/outreach-types';
+import { OUTREACH_TABLE, isReplyTrackPositive, coerceTimestamp, waMessagesSent } from '@/lib/outreach-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,8 +45,8 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const fromISO = searchParams.get('from') || new Date(Date.now() - 7 * 86400000).toISOString();
-    const toISO = searchParams.get('to') ? endOfDay(searchParams.get('to')!) : endOfDay(new Date().toISOString());
+    const fromMs = searchParams.get('from') ? new Date(searchParams.get('from')!).getTime() : Date.now() - 7 * 86400000;
+    const toMs = searchParams.get('to') ? new Date(endOfDay(searchParams.get('to')!)).getTime() : Date.now();
 
     const headers: Record<string, string> = {
         apikey: secretKey,
@@ -61,13 +61,11 @@ export async function GET(req: Request) {
     // since only a handful of fields are read below.
     const cols = '*';
 
-    // Only leads that got at least a first WhatsApp message, within range.
-    const filter =
-        `wa_1=not.is.null&created_at=gte.${encodeURIComponent(fromISO)}&created_at=lte.${encodeURIComponent(toISO)}`;
-
     try {
+        // wa_1_sent_at is free-text "DD/MM/YYYY HH:MM" — fetch every lead with a
+        // first WhatsApp message and range-filter on that timestamp in JS.
         const rows = await fetchAllPages(
-            `${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${cols}&${filter}&order=created_at.desc`,
+            `${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${cols}&wa_1=not.is.null&order=created_at.desc`,
             headers
         );
 
@@ -75,19 +73,20 @@ export async function GET(req: Request) {
         const dailyMap: Record<string, { reachouts: number; replies: number }> = {};
 
         rows.forEach(r => {
+            const dateRef = coerceTimestamp(r.wa_1_sent_at) || coerceTimestamp(r.last_activity) || r.created_at || null;
+            const t = dateRef ? new Date(dateRef).getTime() : null;
+            if (t == null || t < fromMs || t > toMs) return;
+
             reachouts++;
-            for (let n = 1; n <= 4; n++) if (r[`wa_${n}`]) messagesSent++;
+            messagesSent += waMessagesSent(r);
 
             const replied = isReplyTrackPositive(r.whatsapp_reply_track);
             if (replied) replies++;
 
-            const dateRef = coerceTimestamp(r.wa_1_sent_at) || r.last_activity || r.created_at;
-            if (dateRef) {
-                const key = new Date(dateRef).toISOString().slice(0, 10);
-                if (!dailyMap[key]) dailyMap[key] = { reachouts: 0, replies: 0 };
-                dailyMap[key].reachouts++;
-                if (replied) dailyMap[key].replies++;
-            }
+            const key = new Date(dateRef!).toISOString().slice(0, 10);
+            if (!dailyMap[key]) dailyMap[key] = { reachouts: 0, replies: 0 };
+            dailyMap[key].reachouts++;
+            if (replied) dailyMap[key].replies++;
         });
 
         const dailyTrend = Object.entries(dailyMap)

@@ -11,17 +11,14 @@ import {
 } from "@/components/ui/tooltip";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { isReplyTrackPositive, coerceTimestamp, parseJsonArray } from "@/lib/outreach-types";
+import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent } from "@/lib/outreach-types";
 
 function waActivity(lead: any) {
     const conv = parseJsonArray(lead.whatsapp_conversation);
-    let sent = 0;
-    for (let n = 1; n <= 4; n++) if (lead[`wa_${n}`]) sent++;
-    const convSent = conv.filter((m: any) => { const r = m?.role || m?.type || m?.sender; return r === "assistant" || r === "bot" || r === "agent"; }).length;
-    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) ||
-        conv.some((m: any) => { const r = m?.role || m?.type || m?.sender; return r === "user" || r === "User" || r === "customer"; });
+    const sent = waMessagesSent(lead);
+    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
     const lastDate = coerceTimestamp(lead.wa_1_sent_at) || lead.last_activity || lead.created_at || null;
-    return { sent: convSent || sent, replied, lastDate };
+    return { sent, replied, lastDate };
 }
 
 export default function WhatsappAnalyticsPage() {
