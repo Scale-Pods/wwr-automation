@@ -5,6 +5,7 @@ import { RefreshCw, MessageSquare, User, Bot, Link as LinkIcon, Check, Languages
 import { ConsolidatedLead } from "@/lib/leads-utils";
 import { DataContext } from "@/context/DataContext";
 import { parseJsonArray, coerceTimestamp, parseQatarDateTime } from "@/lib/outreach-types";
+import { BotControl } from "@/components/bot-control";
 
 interface WhatsAppChatDetailProps {
     customerId: string;
@@ -224,6 +225,7 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                     </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <BotControl crmId={lead.crm_id} size="sm" />
                     <button disabled={isTranslating} onClick={handleTranslate}
                         style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: isTranslating ? "not-allowed" : "pointer", background: isTranslated ? "rgba(10,132,255,0.10)" : "var(--fill-tertiary)", border: `1px solid ${isTranslated ? "rgba(10,132,255,0.25)" : "var(--glass-border)"}`, color: isTranslated ? "var(--blue)" : "var(--label-primary)" }}>
                         {isTranslating ? <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" /> : <Languages style={{ width: 12, height: 12 }} />}

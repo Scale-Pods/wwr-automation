@@ -14,6 +14,7 @@ import { coerceTimestamp, parseJsonArray, isReplyTrackPositive } from "@/lib/out
 import type { OutreachLead } from "@/lib/outreach-types";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
 import { boardOf, boardLabel, type EmailBoardKey } from "@/lib/email-board";
+import { BotControl } from "@/components/bot-control";
 
 type ThreadMsg = {
     direction: "in" | "out";
@@ -159,6 +160,7 @@ export default function ReceivedEmailsPage() {
             out.push({
                 id: `${lead.lead_id || index}-email-thread`,
                 shareKey: (lead.crm_id || lead.lead_id || ""),
+                crmId: lead.crm_id || null,
                 board: bk,
                 boardLabel: boardLabel(bk),
                 sender: lead.email || "No Email Provided",
@@ -445,8 +447,9 @@ function EmailThreadCard({ thread }: { thread: any }) {
             </CollapsibleTrigger>
             <CollapsibleContent>
                 <div style={{ padding: "4px 18px 18px", borderTop: "1px solid var(--hairline)", display: "flex", flexDirection: "column", gap: 10 }}>
-                    {shareUrl && (
-                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginTop: 8 }}>
+                        <BotControl crmId={thread.crmId} size="sm" />
+                        {shareUrl && (
                             <button
                                 onClick={handleCopyShare}
                                 style={{
@@ -460,8 +463,8 @@ function EmailThreadCard({ thread }: { thread: any }) {
                                 {copied ? <Check style={{ width: 12, height: 12 }} /> : <Link2 style={{ width: 12, height: 12 }} />}
                                 {copied ? "Link Copied" : "Copy Share Link"}
                             </button>
-                        </div>
-                    )}
+                        )}
+                    </div>
                     {thread.thread.map((msg: ThreadMsg, i: number) => {
                         const inbound = msg.direction === "in";
                         const isHtmlDoc = !!msg.bodyHtml && isFullHtmlDocument(msg.bodyHtml);
