@@ -52,7 +52,7 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
 
     const handleCopyLink = () => {
         if (!lead) return;
-        const shareUrl = `${window.location.origin}/chat/${encodeURIComponent(lead.id || lead.lead_id || lead.phone)}`;
+        const shareUrl = `${window.location.origin}/chat/${encodeURIComponent(lead.crm_id || lead.id || lead.lead_id || lead.phone)}`;
         if (navigator.clipboard?.writeText) {
             navigator.clipboard.writeText(shareUrl).then(() => {
                 setCopied(true);
