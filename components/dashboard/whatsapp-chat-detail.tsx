@@ -86,12 +86,19 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
         if (found) {
             const rawName = found.name || found.full_name || [found.first_name, found.last_name].filter(Boolean).join(" ") || "";
             const isPhone = /^\+?\d[\d\s\-().]{4,}$/.test(String(rawName).trim());
+            // lead_stage often holds a raw Zoho stage id (e.g. "5660331000055491001"),
+            // not a name — prefer the human-readable lead_status, and only use
+            // lead_stage when it isn't a bare numeric id.
+            const readableStage = found.lead_status
+                || (found.lead_stage && !/^\d{6,}$/.test(String(found.lead_stage).trim()) ? found.lead_stage : null)
+                || "—";
             const normalized = {
                 ...found,
                 name: rawName && !isPhone ? rawName : "Unknown",
                 phone: found.phone || "",
                 email: found.email || "",
-                stage: found.lead_stage || found.lead_status || "—",
+                crm_id: found.crm_id ?? found.raw?.crm_id ?? null,
+                stage: readableStage,
                 // May live on the row or, for a leads-utils normalized lead, on .raw
                 wa_sentiment: found.wa_sentiment ?? found.raw?.wa_sentiment ?? null,
                 wa_note: found.wa_note ?? found.raw?.wa_note ?? null,
@@ -199,10 +206,21 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexShrink: 0 }}>
                 <div>
                     <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--label-primary)", letterSpacing: "-0.01em", margin: 0 }}>{lead.name}</h2>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, fontSize: 12, color: "var(--label-secondary)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, fontSize: 12, color: "var(--label-secondary)", flexWrap: "wrap" }}>
                         <span style={{ fontFamily: "ui-monospace, monospace" }}>{lead.phone}</span>
                         <span style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--label-quaternary)", display: "inline-block" }} />
                         <span style={{ textTransform: "capitalize" }}>{lead.stage}</span>
+                        {lead.crm_id && (
+                            <>
+                                <span style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--label-quaternary)", display: "inline-block" }} />
+                                <span
+                                    title="CRM ID"
+                                    style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, padding: "1px 7px", borderRadius: 5, background: "var(--fill-tertiary)", border: "1px solid var(--hairline)", color: "var(--label-tertiary)" }}
+                                >
+                                    CRM {lead.crm_id}
+                                </span>
+                            </>
+                        )}
                     </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

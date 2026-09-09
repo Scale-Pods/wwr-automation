@@ -13,6 +13,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DataProvider, useData } from "@/context/DataContext";
 import { MaqsamBalanceDetail } from "@/components/dashboard/maqsam-balance-detail";
+import { InsightsAssistant } from "@/components/insights/InsightsAssistant";
 import { logout } from "@/app/actions/auth";
 
 const dashboardConfig: Record<string, { label: string; color: string; icon: any; items: { title: string; href: string; icon: any }[] }> = {
@@ -375,6 +376,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                 maqsamBalance={maqsamBalance}
                 calls={calls}
             />
+
+            {/* Personal Insights AI Assistant — floating, bottom-right */}
+            <InsightsAssistant />
         </div>
     );
 }

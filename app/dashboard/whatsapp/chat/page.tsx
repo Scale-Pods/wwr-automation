@@ -394,6 +394,7 @@ function CustomerRow({ lead, onClick }: { lead: any; onClick: () => void }) {
     const latestDate = s.lastDate ? new Date(s.lastDate) : new Date(0);
     const displayName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(" ") || "—";
     const displayPhone = lead.phone || "—";
+    const displayCrmId = lead.crm_id || lead.raw?.crm_id || null;
     const displayStatuses = s.slotMsgs.filter(m => m.status).slice(-2);
 
     const formatTooltipDate = (date: Date) => {
@@ -410,7 +411,17 @@ function CustomerRow({ lead, onClick }: { lead: any; onClick: () => void }) {
             onClick={onClick}>
             <td style={{ padding: "10px 16px" }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--label-primary)" }}>{displayName}</div>
-                <div style={{ fontSize: 11, color: "var(--label-tertiary)", marginTop: 2 }}>{displayPhone}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "var(--label-tertiary)" }}>{displayPhone}</span>
+                    {displayCrmId && (
+                        <span
+                            title="CRM ID"
+                            style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, padding: "0px 6px", borderRadius: 4, background: "var(--fill-tertiary)", border: "1px solid var(--hairline)", color: "var(--label-tertiary)", lineHeight: 1.6 }}
+                        >
+                            CRM {displayCrmId}
+                        </span>
+                    )}
+                </div>
             </td>
             <td style={{ padding: "10px 16px", textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--label-primary)", fontVariantNumeric: "tabular-nums" }}>{s.msgCount}</td>
             <td className="px-4 py-3 text-center">
