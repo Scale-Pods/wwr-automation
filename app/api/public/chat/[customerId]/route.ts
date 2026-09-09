@@ -31,11 +31,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ customer
         "Content-Type": "application/json",
     };
 
+    // lead_id is a uuid column — feeding it a non-uuid (e.g. a Zoho crm_id)
+    // makes PostgREST reject the whole `or=(...)` with 22P02, so only probe
+    // lead_id when rawId actually looks like a uuid.
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+
     try {
-        const orParts = [
-            `lead_id.eq.${rawId}`,
-            `crm_id.eq.${rawId}`,
-        ];
+        const orParts: string[] = [`crm_id.eq.${rawId}`];
+        if (isUuid) orParts.push(`lead_id.eq.${rawId}`);
         if (searchPhone) orParts.push(`phone.ilike.*${searchPhone}*`);
 
         const url = `${baseUrl}/${OUTREACH_TABLE}?select=*&or=(${orParts.join(',')})&limit=25`;
