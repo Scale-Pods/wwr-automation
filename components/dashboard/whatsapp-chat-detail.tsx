@@ -203,7 +203,7 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
     }
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", maxHeight: "80vh", background: "var(--bg-layer1)", borderRadius: 14, padding: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", maxHeight: "80dvh", background: "var(--bg-layer1)", borderRadius: 14, padding: 18, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexShrink: 0 }}>
                 <div>
                     <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--label-primary)", letterSpacing: "-0.01em", margin: 0 }}>{lead.name}</h2>
@@ -239,7 +239,7 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                 </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 196px", gap: 12, flex: 1, overflow: "hidden", minHeight: 0 }}>
+            <div className="detail-two-col" style={{ display: "grid", gap: 12, flex: 1, overflow: "hidden", minHeight: 0 }}>
                 <div style={{ display: "flex", flexDirection: "column", background: "var(--fill-quaternary)", border: "1px solid var(--hairline)", borderRadius: 10, overflow: "hidden", height: "100%", minHeight: 0 }}>
                     <div style={{ borderBottom: "1px solid var(--hairline)", padding: "9px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--label-tertiary)", display: "flex", alignItems: "center", gap: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>

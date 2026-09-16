@@ -7,7 +7,7 @@ import {
     LayoutDashboard, Mail, MessageCircle, Mic, Settings,
     LogOut, ChevronDown, Wallet, BarChart2, Users, Send,
     Key, ExternalLink, Inbox, AlertCircle, UserMinus,
-    MessageSquare, Phone, Activity, Globe
+    MessageSquare, Phone, Activity, Globe, Menu, X as XIcon
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -80,18 +80,26 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const [isHovered, setIsHovered] = useState(false);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [walletModal, setWalletModal] = useState<{ isOpen: boolean; type: 'vapi' | 'maqsam' }>({
         isOpen: false, type: 'vapi',
     });
     const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
 
-    const isExpanded = isHovered;
+    // On desktop, hover drives the expand/collapse rail. On <1024px the sidebar
+    // is a drawer instead — it's always "expanded" while open, and hover is moot.
+    const isExpanded = isHovered || mobileNavOpen;
 
     useEffect(() => {
         if (!isExpanded) {
             setIsChannelDropdownOpen(false);
         }
     }, [isExpanded]);
+
+    // Close the mobile drawer whenever the route changes.
+    useEffect(() => {
+        setMobileNavOpen(false);
+    }, [pathname]);
 
     useEffect(() => {
         document.documentElement.classList.add('dark');
@@ -139,10 +147,49 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         : (activeConfig.items.find((item) => item.href === pathname)?.title || activeConfig.label);
 
     return (
-        <div className="flex h-screen overflow-hidden ambient-bg">
-            
-            {/* Sidebar Placeholder to push content */}
-            <div style={{ width: '80px', flexShrink: 0, transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }} className="hidden md:block" />
+        <div className="flex h-[100dvh] overflow-hidden ambient-bg">
+
+            {/* Mobile top bar — hamburger + current app label, <1024px only */}
+            <div
+                className="mobile-topbar"
+                style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, height: 56, zIndex: 180,
+                    alignItems: 'center', gap: 12, padding: '0 14px',
+                    background: 'var(--bg-layer1)', borderBottom: '1px solid var(--hairline)',
+                }}
+            >
+                <button
+                    onClick={() => setMobileNavOpen(v => !v)}
+                    aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+                    style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                        background: 'var(--fill-secondary)', border: '1px solid var(--glass-border)',
+                        color: 'var(--label-primary)', cursor: 'pointer',
+                    }}
+                >
+                    {mobileNavOpen ? <XIcon size={18} /> : <Menu size={18} />}
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    {(() => {
+                        const app = dashboardConfig[currentContext];
+                        const Icon = app.icon;
+                        return <Icon size={16} style={{ color: app.color, flexShrink: 0 }} />;
+                    })()}
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--label-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {currentPageTitle}
+                    </span>
+                </div>
+            </div>
+
+            {/* Backdrop behind the drawer, <1024px only */}
+            <div
+                className={`sidebar-backdrop${mobileNavOpen ? ' is-open' : ''}`}
+                onClick={() => setMobileNavOpen(false)}
+            />
+
+            {/* Sidebar Placeholder to push content (desktop rail only) */}
+            <div style={{ width: '80px', flexShrink: 0, transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }} className="hidden lg:block" />
 
             {/* Floating Universal Sidebar */}
             <aside
@@ -157,7 +204,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                     overflow: 'hidden',
                     display: 'flex', flexDirection: 'column'
                 }}
-                className="apple-sidebar"
+                className={`apple-sidebar${mobileNavOpen ? ' is-open' : ''}`}
             >
                 {/* Logo Area */}
                 <div style={{ padding: isExpanded ? '18px 16px 10px' : '16px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s ease' }}>
@@ -362,8 +409,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             </aside>
 
             {/* ══ MAIN AREA ══ */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-                <main style={{ flex: 1, overflowY: 'auto', padding: 24 }} className="custom-scrollbar">
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', minWidth: 0 }}>
+                <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 24, minWidth: 0 }} className="custom-scrollbar dashboard-main">
                     {children}
                 </main>
             </div>

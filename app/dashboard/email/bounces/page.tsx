@@ -67,7 +67,7 @@ export default function BouncedEmailsPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <StatCard title="Total Bounced" value={bouncedLeads.length.toString()} color="var(--red)" />
                 <StatCard title="Bounce Rate" value={allLeads.length > 0 ? `${((bouncedLeads.length / allLeads.length) * 100).toFixed(1)}%` : "0%"} color="var(--orange)" />
                 <StatCard title="In Date Range" value={filtered.length.toString()} color="var(--label-primary)" />

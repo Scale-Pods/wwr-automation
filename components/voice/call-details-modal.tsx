@@ -154,7 +154,7 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
             <DialogContent
                 style={{
                     display: 'flex', flexDirection: 'column',
-                    maxHeight: '85vh', height: '85vh',
+                    maxHeight: '85dvh', height: '85dvh',
                     width: '95vw', maxWidth: 950,
                     overflow: 'hidden',
                     background: 'var(--bg-layer1)',
@@ -162,12 +162,13 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                     padding: 18,
                     border: '1px solid var(--glass-border)',
                     gap: 0,
+                    minWidth: 0,
                 }}
             >
                 <DialogHeader className="sr-only"><DialogTitle>Call Detail</DialogTitle></DialogHeader>
 
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0, paddingRight: 44 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0, paddingRight: 44, flexWrap: 'wrap', gap: 8 }}>
                     <div>
                         <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--label-primary)', letterSpacing: '-0.01em', margin: 0 }}>{extractedGuestName}</h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: 12, color: 'var(--label-secondary)' }}>
@@ -193,7 +194,7 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                 </div>
 
                 {/* Body grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 196px', gap: 12, flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                <div className="detail-two-col" style={{ display: 'grid', gap: 12, flex: 1, overflow: 'hidden', minHeight: 0 }}>
                     {/* Left: transcript panel */}
                     <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--fill-quaternary)', border: '1px solid var(--hairline)', borderRadius: 10, overflow: 'hidden', height: '100%', minHeight: 0 }}>
                         {/* Panel header */}

@@ -76,7 +76,7 @@ function ProgressBreakdown({ lead }: { lead: OutreachLead }) {
                         )}
                     </DialogTitle>
                 </DialogHeader>
-                <div className="grid grid-cols-2 gap-6 py-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 py-4">
                     <div className="h-[160px] relative flex items-center justify-center">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -209,7 +209,7 @@ export default function LeadsPage() {
     return (
         <div className="space-y-6 relative min-h-[500px]">
             {loading && leads.length === 0 && <WorldWideLoader />}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                     <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "var(--ls-heading)", color: "var(--label-primary)" }}>Leads</h1>
                     <p style={{ fontSize: 13, color: "var(--label-secondary)", marginTop: 2 }}>Manage and track your outreach leads.</p>

@@ -277,6 +277,8 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         text-rendering: optimizeLegibility;
+        overflow-x: hidden;
+        max-width: 100vw;
     }
 
     body {
@@ -284,6 +286,8 @@
         color: var(--label-primary);
         font-size: var(--text-body);
         line-height: 1.47;
+        overflow-x: hidden;
+        max-width: 100vw;
     }
 
     h1, h2, h3, h4, h5, h6 {
@@ -1178,5 +1182,77 @@
     .email-filter-rail {
         position: sticky;
         top: 16px;
+    }
+}
+
+/* Chat/call detail panels: conversation + a fixed-width side rail (Engagement /
+   Lead Info, call transcript stats). Single column below 700px so the side
+   rail never squeezes the conversation into an unreadable sliver on phones. */
+.detail-two-col {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-rows: minmax(0, auto);
+    min-height: 0;
+}
+.detail-two-col > *:last-child {
+    max-height: 220px;
+}
+@media (min-width: 700px) {
+    .detail-two-col {
+        grid-template-columns: minmax(0, 1fr) 196px !important;
+    }
+    .detail-two-col > *:last-child {
+        max-height: none;
+    }
+}
+
+/* Voice calculator: config panel + results. Single column below 900px. */
+.calculator-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 900px) {
+    .calculator-grid {
+        grid-template-columns: 320px minmax(0, 1fr);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Responsive dashboard shell (sidebar drawer on <1024px)
+   ═══════════════════════════════════════════════════════════════ */
+.mobile-topbar { display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 1023px) {
+    .mobile-topbar {
+        display: flex;
+    }
+    .apple-sidebar {
+        position: fixed !important;
+        top: 0; left: 0; height: 100dvh !important;
+        width: min(280px, 82vw) !important;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 200 !important;
+    }
+    .apple-sidebar.is-open {
+        transform: translateX(0);
+    }
+    .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(2px);
+        z-index: 190;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+    .sidebar-backdrop.is-open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .dashboard-main {
+        padding: 16px !important;
+        padding-top: 72px !important;
     }
 }
