@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle, Send, Users, MessageSquare, TrendingUp, BarChart3 } from "lucide-react";
+import { MessageCircle, Send, Users, MessageSquare, TrendingUp, BarChart3, Building2 } from "lucide-react";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -10,7 +10,7 @@ import {
 } from "recharts";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
-import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent } from "@/lib/outreach-types";
+import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead } from "@/lib/outreach-types";
 
 function waActivity(lead: any) {
     const conv = parseJsonArray(lead.whatsapp_conversation);
@@ -101,7 +101,7 @@ export default function WhatsAppDashboardPage() {
     }, [dateRange, fetchData]);
 
     const stats = useMemo(() => {
-        if (!waData) return { totalLeads: 0, sentCount: 0, uniqueSentCount: 0, totalReplies: 0, dailyTrend: [] as any[] };
+        if (!waData) return { totalLeads: 0, sentCount: 0, uniqueSentCount: 0, totalReplies: 0, pfLeadCount: 0, dailyTrend: [] as any[] };
         const allLeads = waData.leads || waData.nr_wf || [];
 
         const from = dateRange?.from ? startOfDay(new Date(dateRange.from)).getTime() : null;
@@ -111,6 +111,7 @@ export default function WhatsAppDashboardPage() {
         let sentCount = 0;
         let totalReplies = 0;
         let uniqueSentCount = 0;
+        let pfLeadCount = 0;
         const dailyMap: Record<string, { reachouts: number; replies: number }> = {};
 
         allLeads.forEach((lead: any) => {
@@ -121,6 +122,7 @@ export default function WhatsAppDashboardPage() {
             uniqueSentCount++;
             sentCount += a.sent;
             if (a.replied) totalReplies++;
+            if (isPropertyFinderLead(lead)) pfLeadCount++;
 
             if (a.lastDate) {
                 const dayKey = new Date(a.lastDate).toISOString().slice(0, 10);
@@ -132,7 +134,7 @@ export default function WhatsAppDashboardPage() {
 
         const dailyTrend = Object.entries(dailyMap).sort(([a], [b]) => a.localeCompare(b)).map(([date, vals]) => ({ date, ...vals }));
 
-        return { totalLeads: allLeads.length, sentCount, uniqueSentCount, totalReplies, dailyTrend };
+        return { totalLeads: allLeads.length, sentCount, uniqueSentCount, totalReplies, pfLeadCount, dailyTrend };
     }, [waData, dateRange]);
 
     const trendData = useMemo(() => stats.dailyTrend.map(d => ({
@@ -192,6 +194,13 @@ export default function WhatsAppDashboardPage() {
                         value={loading ? '—' : stats.sentCount.toLocaleString()}
                         accentColor="var(--purple)"
                         icon={<Send size={17} />}
+                    />
+                    <MetricTile
+                        title="PF Leads"
+                        value={loading ? '—' : stats.pfLeadCount.toLocaleString()}
+                        accentColor="var(--yellow)"
+                        icon={<Building2 size={17} />}
+                        onClick={() => router.push('/dashboard/whatsapp/leads?pfLead=1')}
                     />
                 </div>
             </div>

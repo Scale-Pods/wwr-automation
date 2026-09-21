@@ -498,10 +498,10 @@
         gap: 14px;
     }
     
-    /* ─── METRIC GRID 7 (Fits 6 columns in one row on desktop) ─── */
+    /* ─── METRIC GRID 7 (Fits 7 columns in one row on desktop) ─── */
     .metric-grid-7 {
         display: grid;
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(7, 1fr);
         gap: 10px;
     }
     

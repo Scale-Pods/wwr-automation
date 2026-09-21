@@ -8,7 +8,8 @@ import {
     ChevronLeft,
     ChevronRight,
     MoreVertical,
-    RefreshCw
+    RefreshCw,
+    Building2
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { subDays, startOfDay, endOfDay } from "date-fns";
@@ -27,7 +28,7 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { WhatsAppChatDetail } from "@/components/dashboard/whatsapp-chat-detail";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { isReplyTrackPositive, coerceTimestamp } from "@/lib/outreach-types";
+import { isReplyTrackPositive, coerceTimestamp, isPropertyFinderLead } from "@/lib/outreach-types";
 
 interface UnifiedLead {
     id: string;
@@ -35,6 +36,7 @@ interface UnifiedLead {
     phone: string;
     email?: string;
     hasReplied: boolean;
+    isPfLead: boolean;
     date: Date | null;
     raw: any;
 }
@@ -61,6 +63,12 @@ export default function WhatsappLeadsPage() {
     });
 
     const [replyFilter, setReplyFilter] = useState<string[]>([]);
+    const [pfLeadOnly, setPfLeadOnly] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (new URLSearchParams(window.location.search).get('pfLead') === '1') setPfLeadOnly(true);
+    }, []);
 
     const fetchWAData = useCallback(async (from: Date, to: Date) => {
         setLoading(true);
@@ -103,6 +111,7 @@ export default function WhatsappLeadsPage() {
                 phone: lead.phone || "—",
                 email: lead.email,
                 hasReplied,
+                isPfLead: isPropertyFinderLead(lead),
                 date: getLeadDate(lead),
                 raw: lead
             });
@@ -126,9 +135,11 @@ export default function WhatsappLeadsPage() {
                 if (!ok) return false;
             }
 
+            if (pfLeadOnly && !lead.isPfLead) return false;
+
             return true;
         });
-    }, [allUnifiedLeads, searchQuery, replyFilter]);
+    }, [allUnifiedLeads, searchQuery, replyFilter, pfLeadOnly]);
 
     const toggleReplyFilter = (value: string) => {
         setReplyFilter(prev =>
@@ -139,6 +150,7 @@ export default function WhatsappLeadsPage() {
     const resetFilters = () => {
         setReplyFilter([]);
         setSearchQuery("");
+        setPfLeadOnly(false);
     };
 
     const totalPages = Math.ceil(filteredLeads.length / leadsPerPage);
@@ -170,7 +182,7 @@ export default function WhatsappLeadsPage() {
                     <p style={{ fontSize: 13, color: 'var(--label-secondary)', marginTop: 2 }}>Review all leads contacted via WhatsApp</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {(replyFilter.length > 0 || searchQuery) && (
+                    {(replyFilter.length > 0 || searchQuery || pfLeadOnly) && (
                         <button onClick={resetFilters} style={{ fontSize: 11, fontWeight: 700, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer' }}>RESET FILTERS</button>
                     )}
                     <DateRangePicker onUpdate={({ range }) => setDateRange({ from: range?.from, to: range?.to })} />
@@ -205,6 +217,14 @@ export default function WhatsappLeadsPage() {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <button
+                        onClick={() => setPfLeadOnly(prev => !prev)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--radius-md)', border: pfLeadOnly ? '1px solid var(--yellow)' : '1px solid var(--glass-border)', background: pfLeadOnly ? 'rgba(255,204,0,0.14)' : 'var(--fill-tertiary)', color: pfLeadOnly ? 'var(--yellow)' : 'var(--label-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+                    >
+                        <Building2 style={{ width: 12, height: 12 }} />
+                        PF Lead {pfLeadOnly && "✓"}
+                    </button>
 
                     <button
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'background 130ms' }}
@@ -263,9 +283,15 @@ export default function WhatsappLeadsPage() {
                                     return (
                                         <tr
                                             key={`${lead.id}-${index}`}
-                                            style={{ borderBottom: '1px solid var(--hairline)', cursor: 'pointer', transition: 'background 120ms' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--fill-quaternary)')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                            style={{
+                                                borderBottom: '1px solid var(--hairline)',
+                                                cursor: 'pointer',
+                                                transition: 'background 120ms',
+                                                background: lead.isPfLead ? 'rgba(255,204,0,0.07)' : 'transparent',
+                                                borderLeft: lead.isPfLead ? '3px solid var(--yellow)' : '3px solid transparent',
+                                            }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = lead.isPfLead ? 'rgba(255,204,0,0.14)' : 'var(--fill-quaternary)')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = lead.isPfLead ? 'rgba(255,204,0,0.07)' : 'transparent')}
                                             onClick={() => { setSelectedLeadIdForChat(lead.id); setSelectedLeadObj(lead.raw); }}
                                         >
                                             <td style={{ padding: '12px 16px' }} onClick={(e) => e.stopPropagation()}>
@@ -274,7 +300,16 @@ export default function WhatsappLeadsPage() {
                                                     onCheckedChange={() => toggleSelect(lead.id)}
                                                 />
                                             </td>
-                                            <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: 'var(--label-primary)' }}>{lead.name}</td>
+                                            <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: 'var(--label-primary)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    {lead.name}
+                                                    {lead.isPfLead && (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontSize: 9, fontWeight: 700, background: 'rgba(255,204,0,0.16)', color: 'var(--yellow)', letterSpacing: '0.02em' }}>
+                                                            <Building2 style={{ width: 9, height: 9 }} /> PF LEAD
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td style={{ padding: '12px 16px', fontSize: 11, fontFamily: 'monospace', color: 'var(--label-secondary)' }}>{lead.phone}</td>
                                             <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                                                 {lead.hasReplied

@@ -2,7 +2,7 @@
 
 import {
     Users, Mail, MessageCircle, Phone, TrendingUp, PieChart as PieChartIcon,
-    MessageSquare, Inbox, Send
+    MessageSquare, Inbox, Send, Building2
 } from "lucide-react";
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { subDays, format } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useData } from "@/context/DataContext";
-import { coerceTimestamp } from "@/lib/outreach-types";
+import { coerceTimestamp, isPropertyFinderLead } from "@/lib/outreach-types";
 
 /* ── Custom Tooltip for Recharts ── */
 function AppleTooltip({ active, payload, label }: any) {
@@ -126,9 +126,11 @@ export default function MasterDashboard() {
         let totalEmailReplies = 0;
         let totalWaReachouts = 0;
         let totalWaReplies = 0;
+        let totalPfLeads = 0;
 
         allLeads.forEach((lead: any) => {
             if (inRange(lead.created_at)) totalLeads++;
+            if (isPropertyFinderLead(lead) && inRange(lead.created_at)) totalPfLeads++;
 
             // Emails sent — email_slots already only contains slots where email_N
             // itself has content (see buildEmailSlots), so just count them.
@@ -175,6 +177,7 @@ export default function MasterDashboard() {
             totalWaReplies,
             waReplyRate: totalWaReachouts > 0 ? ((totalWaReplies / totalWaReachouts) * 100).toFixed(1) : '0',
             totalVoiceCalls,
+            totalPfLeads,
         };
     }, [allLeads, loadingLeads, calls, loadingCalls, dateRange]);
 
@@ -281,6 +284,15 @@ export default function MasterDashboard() {
                     trendDir="neutral"
                     accentColor="var(--orange)"
                     icon={<Phone size={17} />}
+                />
+                <MetricTile
+                    title="PF Leads"
+                    value={loading ? '—' : (m?.totalPfLeads ?? 0).toLocaleString()}
+                    trend="From Property Finder"
+                    trendDir="neutral"
+                    accentColor="var(--yellow)"
+                    icon={<Building2 size={17} />}
+                    onClick={() => router.push('/dashboard/whatsapp/leads?pfLead=1')}
                 />
             </div>
 

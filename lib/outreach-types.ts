@@ -155,6 +155,13 @@ export const OUTREACH_LIST_COLUMNS = [
 
 // ─── small shared helpers ────────────────────────────────────────────────────
 
+/** True when outreach_table.Property_Finder marks this lead as sourced from Property Finder. */
+export function isPropertyFinderLead(row: any): boolean {
+    const v = row?.Property_Finder;
+    if (v === undefined || v === null) return false;
+    return String(v).trim().toLowerCase() === 'yes';
+}
+
 /** A tracking string counts as "replied" unless it's empty / "no" / "none". */
 export function isReplyTrackPositive(v: any): boolean {
     if (v === undefined || v === null) return false;

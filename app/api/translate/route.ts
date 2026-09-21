@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
 
+const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
+
+function extractJsonArray(raw: string): any {
+    const trimmed = raw.trim();
+    const start = trimmed.indexOf('[');
+    const end = trimmed.lastIndexOf(']');
+    if (start === -1 || end === -1) throw new Error('No JSON array found in response');
+    return JSON.parse(trimmed.slice(start, end + 1));
+}
+
 export async function POST(req: Request) {
     try {
         const { text, texts } = await req.json();
-        
-        const apiKey = process.env.OPENAI_API_KEY;
-        
+
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+
         if (!apiKey) {
             // Fallback for development if no key
             if (texts && Array.isArray(texts)) {
@@ -16,50 +26,51 @@ export async function POST(req: Request) {
 
         if (texts && Array.isArray(texts)) {
             // Bulk translation
-            const prompt = `Translate the following list of messages to English. Maintain the exact same order. Respond with a JSON array of translated strings only.
-            
-            Messages:
-            ${JSON.stringify(texts)}`;
+            const prompt = `Translate the following list of messages to English. If a message is already in English, return it unchanged. Maintain the exact same order and array length. Respond with ONLY a JSON array of translated strings, no other text.\n\nMessages:\n${JSON.stringify(texts)}`;
 
-            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            const response = await fetch("https://api.anthropic.com/v1/messages", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`
+                    "x-api-key": apiKey,
+                    "anthropic-version": "2023-06-01"
                 },
                 body: JSON.stringify({
-                    model: "gpt-4o-mini",
-                    messages: [{ role: "user", content: prompt }],
-                    response_format: { type: "json_object" },
-                    temperature: 0.1
+                    model: ANTHROPIC_MODEL,
+                    max_tokens: 4096,
+                    temperature: 0.1,
+                    messages: [{ role: "user", content: prompt }]
                 })
             });
 
-            if (!response.ok) throw new Error("OpenAI API failed");
+            if (!response.ok) throw new Error(`Anthropic API failed: ${response.status} ${await response.text()}`);
             const data = await response.json();
-            const content = JSON.parse(data.choices[0].message.content);
-            return NextResponse.json({ translatedTexts: content.translations || content.results || Object.values(content)[0] });
+            const content = data.content?.[0]?.text ?? '[]';
+            const translatedTexts = extractJsonArray(content);
+            return NextResponse.json({ translatedTexts });
         }
 
-        const prompt = `Translate the following text to English. If it is already in English, return it as is. Output ONLY the translated text.\n\nText: ${text}`;
+        const prompt = `Translate the following text to English. If it is already in English, return it as is. Output ONLY the translated text, no preamble or explanation.\n\nText: ${text}`;
 
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01"
             },
             body: JSON.stringify({
-                model: "gpt-4o-mini",
-                messages: [{ role: "user", content: prompt }],
-                temperature: 0.3
+                model: ANTHROPIC_MODEL,
+                max_tokens: 1024,
+                temperature: 0.3,
+                messages: [{ role: "user", content: prompt }]
             })
         });
 
-        if (!response.ok) throw new Error("OpenAI API failed");
+        if (!response.ok) throw new Error(`Anthropic API failed: ${response.status} ${await response.text()}`);
         const data = await response.json();
-        const translatedText = data.choices[0].message.content.trim();
-        
+        const translatedText = (data.content?.[0]?.text ?? '').trim();
+
         return NextResponse.json({ translatedText });
     } catch (error) {
         console.error("Translate API Error:", error);
