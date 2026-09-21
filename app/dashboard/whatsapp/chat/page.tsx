@@ -7,11 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { WhatsAppChatDetail } from "@/components/dashboard/whatsapp-chat-detail";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, Filter, Users, Send, MessageSquare, RefreshCw, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { Search, Filter, Users, Send, MessageSquare, RefreshCw, ChevronLeft, ChevronRight, MoreHorizontal, Building2 } from "lucide-react";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays, startOfDay, endOfDay } from "date-fns";
-import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent } from "@/lib/outreach-types";
+import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead } from "@/lib/outreach-types";
 
 // ── one lead's WhatsApp signals from outreach_table ──────────────────────────
 function waSignals(lead: any) {
@@ -87,8 +87,8 @@ export default function WhatsappChatPage() {
         initialProcessed.current = true;
     }, [initialSelectedId]);
 
-    const [pendingFilters, setPendingFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; }>({ replyStatus: [], messageStatus: [] });
-    const [activeFilters, setActiveFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; }>({ replyStatus: [], messageStatus: [] });
+    const [pendingFilters, setPendingFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; pfLead: boolean; }>({ replyStatus: [], messageStatus: [], pfLead: false });
+    const [activeFilters, setActiveFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; pfLead: boolean; }>({ replyStatus: [], messageStatus: [], pfLead: false });
 
     const leadsInRange = useMemo(() => {
         const from = dateRange?.from ? startOfDay(new Date(dateRange.from)).getTime() : null;
@@ -120,7 +120,9 @@ export default function WhatsappChatPage() {
                     return s.slotMsgs.some(m => String(m.status || "").toLowerCase().includes(target));
                 });
 
-            return matchesReplyStatus && matchesMessageStatus;
+            const matchesPfLead = !activeFilters.pfLead || isPropertyFinderLead(lead);
+
+            return matchesReplyStatus && matchesMessageStatus && matchesPfLead;
         }).sort((a, b) => {
             const da = waSignals(a).lastDate;
             const db = waSignals(b).lastDate;
@@ -145,7 +147,7 @@ export default function WhatsappChatPage() {
 
     const handleApplyFilters = () => setActiveFilters(pendingFilters);
     const handleResetFilters = () => {
-        const reset = { replyStatus: [], messageStatus: [] };
+        const reset = { replyStatus: [], messageStatus: [], pfLead: false };
         setPendingFilters(reset);
         setActiveFilters(reset);
     };
@@ -154,6 +156,9 @@ export default function WhatsappChatPage() {
             const current = prev[type];
             return { ...prev, [type]: current.includes(value) ? current.filter(v => v !== value) : [...current, value] };
         });
+    };
+    const togglePfLeadFilter = () => {
+        setPendingFilters(prev => ({ ...prev, pfLead: !prev.pfLead }));
     };
 
     const paginatedLeads = useMemo(() => {
@@ -210,9 +215,9 @@ export default function WhatsappChatPage() {
                     style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--hairline)", background: "var(--fill-tertiary)", fontSize: 13, fontWeight: 500, color: "var(--label-secondary)", cursor: "pointer" }}>
                     <Filter style={{ width: 13, height: 13 }} />
                     {showFilters ? "Hide" : "Show"} Filters
-                    {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0) && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)", marginLeft: 2 }} />}
+                    {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead) && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)", marginLeft: 2 }} />}
                 </button>
-                {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0) && (
+                {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead) && (
                     <button onClick={handleResetFilters} style={{ fontSize: 11, fontWeight: 700, color: "var(--blue)", background: "none", border: "none", cursor: "pointer" }}>RESET ALL</button>
                 )}
             </div>
@@ -236,6 +241,10 @@ export default function WhatsappChatPage() {
                             <FilterOption label="Sent" checked={pendingFilters.messageStatus.includes("Sent")} onCheckedChange={() => toggleFilter("messageStatus", "Sent")} />
                             <FilterOption label="Failed" checked={pendingFilters.messageStatus.includes("Failed")} onCheckedChange={() => toggleFilter("messageStatus", "Failed")} />
                             <FilterOption label="Delivered" checked={pendingFilters.messageStatus.includes("Delivered")} onCheckedChange={() => toggleFilter("messageStatus", "Delivered")} />
+                        </FilterSection>
+
+                        <FilterSection title="Source">
+                            <FilterOption label="PF Lead" checked={pendingFilters.pfLead} onCheckedChange={togglePfLeadFilter} />
                         </FilterSection>
 
                         <button onClick={handleApplyFilters}
@@ -396,6 +405,7 @@ function CustomerRow({ lead, onClick }: { lead: any; onClick: () => void }) {
     const displayPhone = lead.phone || "—";
     const displayCrmId = lead.crm_id || lead.raw?.crm_id || null;
     const displayStatuses = s.slotMsgs.filter(m => m.status).slice(-2);
+    const isPfLead = isPropertyFinderLead(lead);
 
     const formatTooltipDate = (date: Date) => {
         if (isNaN(date.getTime())) return "";
@@ -405,12 +415,25 @@ function CustomerRow({ lead, onClick }: { lead: any; onClick: () => void }) {
     };
 
     return (
-        <tr style={{ borderBottom: "1px solid var(--hairline)", cursor: "pointer", transition: "background 100ms" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "var(--fill-quaternary)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+        <tr style={{
+            borderBottom: "1px solid var(--hairline)",
+            cursor: "pointer",
+            transition: "background 100ms",
+            background: isPfLead ? "rgba(255,204,0,0.07)" : "transparent",
+            borderLeft: isPfLead ? "3px solid var(--yellow)" : "3px solid transparent",
+        }}
+            onMouseEnter={e => (e.currentTarget.style.background = isPfLead ? "rgba(255,204,0,0.14)" : "var(--fill-quaternary)")}
+            onMouseLeave={e => (e.currentTarget.style.background = isPfLead ? "rgba(255,204,0,0.07)" : "transparent")}
             onClick={onClick}>
             <td style={{ padding: "10px 16px" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--label-primary)" }}>{displayName}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--label-primary)" }}>{displayName}</span>
+                    {isPfLead && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: "var(--radius-sm)", fontSize: 9, fontWeight: 700, background: "rgba(255,204,0,0.16)", color: "var(--yellow)", letterSpacing: "0.02em" }}>
+                            <Building2 style={{ width: 9, height: 9 }} /> PF LEAD
+                        </span>
+                    )}
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 11, color: "var(--label-tertiary)" }}>{displayPhone}</span>
                     {displayCrmId && (
