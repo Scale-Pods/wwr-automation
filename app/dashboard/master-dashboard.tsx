@@ -285,15 +285,6 @@ export default function MasterDashboard() {
                     accentColor="var(--orange)"
                     icon={<Phone size={17} />}
                 />
-                <MetricTile
-                    title="PF Leads"
-                    value={loading ? '—' : (m?.totalPfLeads ?? 0).toLocaleString()}
-                    trend="From Property Finder"
-                    trendDir="neutral"
-                    accentColor="var(--yellow)"
-                    icon={<Building2 size={17} />}
-                    onClick={() => router.push('/dashboard/whatsapp/leads?pfLead=1')}
-                />
             </div>
 
             {/* ── Charts ── */}
