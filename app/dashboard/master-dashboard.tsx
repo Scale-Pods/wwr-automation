@@ -230,7 +230,7 @@ export default function MasterDashboard() {
             </div>
 
             {/* ── Unified Metric Row ── */}
-            <div className="metric-grid-7">
+            <div className="metric-grid-6">
                 <MetricTile
                     title="Total Leads"
                     value={loadingMasterLeadsTotal && masterLeadsTotal == null ? '—' : (masterLeadsTotal ?? 0).toLocaleString()}
