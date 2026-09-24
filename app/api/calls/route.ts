@@ -108,6 +108,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
             dialCode: dialCodeOf(ph),
             name: resolvedName,
             leadId: lead ? (lead.lead_id || lead.crm_id) : (d.lead_id || null),
+            crmId: lead?.crm_id || null,
             leadStatus: lead ? (lead.lead_status || null) : null,
             leadStage: lead ? (lead.lead_stage || null) : null,
             callSummary: d.summary || '',

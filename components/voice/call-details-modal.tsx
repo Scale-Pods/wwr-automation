@@ -2,12 +2,14 @@
 
 import {
     Dialog,
+    DialogClose,
     DialogContent,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Play, Pause, Volume2, VolumeX, Phone, Clock, FileText, RotateCcw, RotateCw, Download, Copy, Check } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Phone, Clock, FileText, RotateCcw, RotateCw, Download, Copy, Check, Link as LinkIcon, X } from "lucide-react";
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { parseCallTranscript } from "@/lib/call-transcript";
 
 interface CallDetailsModalProps {
     open: boolean;
@@ -18,6 +20,7 @@ interface CallDetailsModalProps {
 export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalProps) {
     const [fullCall, setFullCall] = useState<any>(null);
     const [transcriptCopied, setTranscriptCopied] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
 
     const displayCall = fullCall || call || {};
     const audioUrl = displayCall.audio_url || displayCall.recordingUrl || null;
@@ -32,44 +35,7 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
         }
     }, [open, call]);
 
-    const getMessages = (data: any) => {
-        if (!data) return [];
-        let rawMessages: any[] = [];
-        if (Array.isArray(data.transcript) && data.transcript.length > 0) {
-            rawMessages = data.transcript;
-        } else if (Array.isArray(data.messages)) {
-            rawMessages = data.messages;
-        } else if (data.analysis && Array.isArray(data.analysis.transcript)) {
-            rawMessages = data.analysis.transcript;
-        } else if (typeof data.transcript === 'string' && data.transcript.trim()) {
-            const text = data.transcript;
-            const parts: string[] = text.split(/(?=(?:AI|User|Assistant|Agent|Bot|Guest|Customer|Caller|System):)/i);
-            if (parts.length > 1) {
-                const turns: any[] = [];
-                for (const part of parts) {
-                    const trimmed = part.trim();
-                    if (!trimmed) continue;
-                    const markerMatch = trimmed.match(/^(AI|User|Assistant|Agent|Bot|Guest|Customer|Caller|System):\s*([\s\S]*)/i);
-                    if (markerMatch) {
-                        const roleLabel = markerMatch[1].toLowerCase();
-                        const role = (roleLabel === 'ai' || roleLabel === 'assistant' || roleLabel === 'agent' || roleLabel === 'bot') ? 'assistant' : 'user';
-                        turns.push({ role, message: markerMatch[2].trim() });
-                    } else {
-                        turns.push({ role: 'assistant', message: trimmed });
-                    }
-                }
-                return turns;
-            }
-            return [{ role: 'assistant', message: text }];
-        }
-        return rawMessages.map((msg: any) => ({
-            role: msg.role === 'agent' ? 'assistant' : (msg.role || 'user'),
-            message: msg.message || msg.content || msg.text || '',
-            startTime: msg.startTime ?? msg.start_time ?? msg.time ?? msg.timestamp
-        }));
-    };
-
-    const messages = getMessages(displayCall);
+    const messages = parseCallTranscript(displayCall);
     const getDurationData = (data: any) => {
         let seconds = 0;
         if (typeof data.durationSeconds === 'number' && data.durationSeconds > 0) seconds = data.durationSeconds;
@@ -147,11 +113,35 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
         setTimeout(() => setTranscriptCopied(false), 2000);
     };
 
+    // Public share link is keyed by the lead's crm_id (lead_id as fallback for
+    // leads not yet in the CRM). The list row carries it; /api/calls/[id] may not.
+    const shareKey = call?.crmId || fullCall?.crmId || call?.leadId || fullCall?.leadId || null;
+    const shareUrl = shareKey && typeof window !== 'undefined'
+        ? `${window.location.origin}/call/share/${encodeURIComponent(shareKey)}${call?.id ? `?call=${encodeURIComponent(call.id)}` : ''}`
+        : null;
+
+    const handleCopyShareLink = async () => {
+        if (!shareUrl) return;
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+        } catch {
+            const ta = document.createElement('textarea');
+            ta.value = shareUrl;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch { }
+            document.body.removeChild(ta);
+        }
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+    };
+
     if (!call) return null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
+                hideClose
                 style={{
                     display: 'flex', flexDirection: 'column',
                     maxHeight: '85dvh', height: '85dvh',
@@ -168,8 +158,8 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                 <DialogHeader className="sr-only"><DialogTitle>Call Detail</DialogTitle></DialogHeader>
 
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0, paddingRight: 44, flexWrap: 'wrap', gap: 8 }}>
-                    <div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0, gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
                         <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--label-primary)', letterSpacing: '-0.01em', margin: 0 }}>{extractedGuestName}</h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: 12, color: 'var(--label-secondary)' }}>
                             <span style={{ fontFamily: 'ui-monospace, monospace' }}>{guestNumber}</span>
@@ -177,20 +167,54 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                             <span>{callTypeDisplay}</span>
                         </div>
                     </div>
-                    <button
-                        onClick={handleCopyTranscript}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 5,
-                            padding: '5px 11px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                            cursor: 'pointer', transition: 'all 120ms',
-                            background: transcriptCopied ? 'rgba(10,132,255,0.10)' : 'var(--fill-tertiary)',
-                            border: `1px solid ${transcriptCopied ? 'rgba(10,132,255,0.25)' : 'var(--glass-border)'}`,
-                            color: transcriptCopied ? 'var(--blue)' : 'var(--label-primary)',
-                        }}
-                    >
-                        {transcriptCopied ? <Check style={{ width: 12, height: 12 }} /> : <Copy style={{ width: 12, height: 12 }} />}
-                        {transcriptCopied ? 'Copied' : 'Copy Transcript'}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <button
+                            onClick={handleCopyTranscript}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 5, height: 30,
+                                padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                                cursor: 'pointer', transition: 'all 120ms',
+                                background: transcriptCopied ? 'rgba(10,132,255,0.10)' : 'var(--fill-tertiary)',
+                                border: `1px solid ${transcriptCopied ? 'rgba(10,132,255,0.25)' : 'var(--glass-border)'}`,
+                                color: transcriptCopied ? 'var(--blue)' : 'var(--label-primary)',
+                            }}
+                        >
+                            {transcriptCopied ? <Check style={{ width: 12, height: 12 }} /> : <Copy style={{ width: 12, height: 12 }} />}
+                            {transcriptCopied ? 'Copied' : 'Copy Transcript'}
+                        </button>
+                        <button
+                            onClick={handleCopyShareLink}
+                            disabled={!shareUrl}
+                            title={shareUrl ? 'Copy a public link to this call' : 'This call is not linked to a CRM lead'}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 5, height: 30,
+                                padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                                cursor: shareUrl ? 'pointer' : 'not-allowed', opacity: shareUrl ? 1 : 0.5,
+                                transition: 'all 120ms',
+                                background: linkCopied ? 'rgba(48,209,88,0.15)' : 'var(--blue)',
+                                border: `1px solid ${linkCopied ? 'rgba(48,209,88,0.30)' : 'transparent'}`,
+                                color: linkCopied ? 'var(--green)' : '#fff',
+                            }}
+                        >
+                            {linkCopied ? <Check style={{ width: 12, height: 12 }} /> : <LinkIcon style={{ width: 12, height: 12 }} />}
+                            {linkCopied ? 'Link Copied' : 'Share Link'}
+                        </button>
+                        {/* Own close button with fixed inline size, so no global style can resize it. */}
+                        <DialogClose
+                            aria-label="Close"
+                            style={{
+                                width: 30, height: 30, minWidth: 30, minHeight: 30, padding: 0, marginLeft: 2,
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+                                background: 'var(--fill-tertiary)', border: '1px solid var(--glass-border)',
+                                color: 'var(--label-secondary)', transition: 'all 120ms',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--fill-secondary)'; e.currentTarget.style.color = 'var(--label-primary)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--fill-tertiary)'; e.currentTarget.style.color = 'var(--label-secondary)'; }}
+                        >
+                            <X style={{ width: 14, height: 14 }} />
+                        </DialogClose>
+                    </div>
                 </div>
 
                 {/* Body grid */}
@@ -311,7 +335,7 @@ function StatBox({ label, value, icon: Icon, color }: { label: string; value: st
     );
 }
 
-function ModernAudioPlayer({ audioUrl, initialDuration = 0 }: { audioUrl: string; initialDuration?: number }) {
+export function ModernAudioPlayer({ audioUrl, initialDuration = 0 }: { audioUrl: string; initialDuration?: number }) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const seekRef = useRef<HTMLDivElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
