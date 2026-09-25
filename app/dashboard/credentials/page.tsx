@@ -2,11 +2,39 @@
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { MessageCircle, Mic, Copy, Wallet, Phone, BarChart3, AtSign } from "lucide-react";
+import { MessageCircle, Mic, Copy, Wallet, Phone, BarChart3, Mail, Check } from "lucide-react";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
+
+const VAPI_ACCOUNTS = [
+    {
+        label: "WWR Commercial",
+        email: "rizwan@wwrqatar.com",
+        endpointUrl: "sip:wwrxscalepods_support_2026@sip.vapi.ai",
+        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-2-495116172944.europe-west3.run.app/assistant-selector",
+        assistantId: "ec46b36b-6eba-45d0-bfdc-5eb1c39f75da",
+        phone: "+97440197787",
+    },
+    {
+        label: "WWR Residential",
+        email: "sales@wwrqatar.com",
+        endpointUrl: "sip:wwrxscalepods_support_2026_second@sip.vapi.ai",
+        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-1-495116172944.europe-west3.run.app/assistant-selector",
+        assistantId: "8bb8b584-1307-4e97-996c-360cfc40c892",
+        phone: "+97440196942",
+    },
+    {
+        label: "WWR Business",
+        email: "info@wwrqatar.com",
+        endpointUrl: "sip:wwrxscalepods_support_2026_third@sip.vapi.ai",
+        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-3-495116172944.europe-west1.run.app/assistant-selector",
+        assistantId: "79a32791-27b0-46d2-91ed-bc0fecc46eae",
+        phone: "+97440197754",
+    },
+];
+
+const WHATSAPP_NUMBER = "+97430020275";
 
 export default function CredentialsPage() {
     const { calls } = useData();
@@ -34,37 +62,7 @@ export default function CredentialsPage() {
                     iconBg="bg-emerald-50/10"
                 >
                     <div className="grid gap-4">
-                        <ReadOnlyField label="WhatsApp Account 1" value="Active Integration" />
-                        <ReadOnlyField label="WhatsApp Account 2" value="Backup Line" />
-                    </div>
-                </CredentialSection>
-
-                {/* Provisioned Numbers Section */}
-                <CredentialSection
-                    title="Provisioned Phone Numbers"
-                    description="Active telephony lines for Voice and WhatsApp."
-                    icon={Phone}
-                    iconColor="text-cyan-600"
-                    iconBg="bg-cyan-50/10"
-                >
-                    <div className="space-y-4 bg-[var(--fill-quaternary)] p-4 rounded-xl border border-[var(--glass-border)]">
-                        <ReadOnlyField label="Maqsam (Qatar)" value=" " />
-                        <ReadOnlyField label="Voice Agent ID" value="World_Wide_Real_Estate_Voice_Agent" />
-                    </div>
-                </CredentialSection>
-
-                {/* Contact Endpoints Section */}
-                <CredentialSection
-                    title="Contact Endpoints"
-                    description="Outreach identities used across email, WhatsApp, and voice."
-                    icon={AtSign}
-                    iconColor="text-violet-600"
-                    iconBg="bg-violet-50/10"
-                >
-                    <div className="grid gap-4">
-                        <PlaceholderField label="Email" placeholder="name@company.com" />
-                        <PlaceholderField label="WhatsApp Number" placeholder="+974 0000 0000" />
-                        <PlaceholderField label="Phone Number" placeholder="+974 0000 0000" />
+                        <ReadOnlyField label="WhatsApp Number" value={WHATSAPP_NUMBER} />
                     </div>
                 </CredentialSection>
 
@@ -97,7 +95,7 @@ export default function CredentialsPage() {
                         <div className="flex items-center gap-2 pt-2">
                             <Button variant="outline" size="sm" className="flex-1 border-[var(--glass-border)] text-[var(--label-primary)] hover:bg-[var(--fill-secondary)] text-xs h-9 gap-1.5" onClick={() => router.push('/dashboard/voice/logs')}>
                                 <BarChart3 className="h-3.5 w-3.5" />
-                                Cost Analysis
+                                Call Logs
                             </Button>
                             <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 gap-1.5" onClick={() => window.open('https://dashboard.vapi.ai/login', '_blank')}>
                                 <Wallet className="h-3.5 w-3.5" />
@@ -107,6 +105,41 @@ export default function CredentialsPage() {
                     </div>
                 </CredentialSection>
 
+                {/* Voice Agent Accounts Section — spans full width, 3 accounts */}
+                <CredentialSection
+                    title="Voice Agent Accounts"
+                    description="Vapi/Maqsam SIP endpoints per board, with their assistant IDs and phone lines."
+                    icon={Phone}
+                    iconColor="text-cyan-600"
+                    iconBg="bg-cyan-50/10"
+                    className="md:col-span-2"
+                >
+                    <div className="grid gap-4 md:grid-cols-3">
+                        {VAPI_ACCOUNTS.map(acc => (
+                            <VapiAccountCard key={acc.assistantId} account={acc} />
+                        ))}
+                    </div>
+                </CredentialSection>
+
+            </div>
+        </div>
+    );
+}
+
+function VapiAccountCard({ account }: { account: typeof VAPI_ACCOUNTS[number] }) {
+    return (
+        <div className="bg-[var(--fill-quaternary)] rounded-xl border border-[var(--glass-border)] p-4 space-y-3">
+            <div>
+                <p className="text-sm font-bold text-[var(--label-primary)]">{account.label}</p>
+                <p className="text-[11px] text-[var(--label-tertiary)] mt-0.5 flex items-center gap-1.5">
+                    <Mail className="h-3 w-3" /> {account.email}
+                </p>
+            </div>
+            <div className="space-y-3">
+                <ReadOnlyField label="Endpoint URL" value={account.endpointUrl} mono small />
+                <ReadOnlyField label="Assistant Selector" value={account.assistantSelectorUrl} mono small />
+                <ReadOnlyField label="Assistant ID" value={account.assistantId} mono small />
+                <ReadOnlyField label="Phone Number" value={account.phone} mono small />
             </div>
         </div>
     );
@@ -133,37 +166,32 @@ function CredentialSection({ title, description, icon: Icon, iconColor, iconBg, 
     );
 }
 
-function PlaceholderField({ label, placeholder }: { label: string; placeholder: string }) {
-    return (
-        <div className="space-y-1">
-            <Label className="text-[10px] font-bold text-[var(--label-tertiary)] uppercase tracking-wider">{label}</Label>
-            <Input
-                placeholder={placeholder}
-                className="h-9 text-xs bg-[var(--fill-tertiary)] border border-[var(--glass-border)] text-[var(--label-primary)] rounded-md"
-            />
-        </div>
-    );
-}
-
-function ReadOnlyField({ label, value, isPassword }: { label: string, value: string, isPassword?: boolean }) {
+function ReadOnlyField({ label, value, isPassword, mono, small }: { label: string, value: string, isPassword?: boolean, mono?: boolean, small?: boolean }) {
     const [show, setShow] = useState(false);
+    const [copied, setCopied] = useState(false);
     const displayValue = isPassword && !show ? "••••••••••••••••••••••••" : value;
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+    };
 
     return (
         <div className="space-y-1">
             <Label className="text-[10px] font-bold text-[var(--label-tertiary)] uppercase tracking-wider">{label}</Label>
             <div className="relative group">
-                <div className="flex items-center w-full rounded-md border border-[var(--glass-border)] bg-[var(--fill-tertiary)] px-3 py-1.5 text-xs text-[var(--label-primary)] shadow-sm">
-                    <span className="flex-1 truncate font-sans">
+                <div className={`flex items-start gap-2 w-full rounded-md border border-[var(--glass-border)] bg-[var(--fill-tertiary)] px-3 text-[var(--label-primary)] shadow-sm ${small ? "py-1.5 text-[11px]" : "py-1.5 text-xs"}`}>
+                    <span className={`flex-1 min-w-0 break-all ${mono ? "font-mono" : "font-sans"}`}>
                         {displayValue}
                     </span>
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-5 w-5 ml-2 text-[var(--label-secondary)] hover:text-[var(--label-primary)] opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => navigator.clipboard.writeText(value)}
+                        className="h-5 w-5 flex-shrink-0 mt-0.5 text-[var(--label-secondary)] hover:text-[var(--label-primary)] opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={handleCopy}
                     >
-                        <Copy className="h-3 w-3" />
+                        {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                     </Button>
                 </div>
             </div>

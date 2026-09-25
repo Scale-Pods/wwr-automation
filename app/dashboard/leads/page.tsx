@@ -425,10 +425,13 @@ function PaginationFooter({ totalItems, currentPage, itemsPerPage, onPageChange 
             <p className="text-sm text-[var(--label-secondary)]">
                 Showing <span className="font-bold text-[var(--label-primary)]">{totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}-{Math.min(currentPage * itemsPerPage, totalItems)}</span> of {totalItems} items
             </p>
-            <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-[var(--glass-border)] bg-[var(--fill-tertiary)] hover:bg-[var(--fill-secondary)] text-[var(--label-primary)]" onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>
-                    <ChevronLeft className="h-4 w-4" />
-                </Button>
+            <div className="flex items-center gap-1">
+                <button
+                    style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: '1px solid var(--hairline)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', cursor: 'default', opacity: currentPage === 1 ? 0.4 : 1 }}
+                    onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}
+                >
+                    <ChevronLeft style={{ width: 14, height: 14 }} />
+                </button>
                 <div className="flex items-center gap-1">
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                         let pageNum;
@@ -438,15 +441,22 @@ function PaginationFooter({ totalItems, currentPage, itemsPerPage, onPageChange 
                         else pageNum = currentPage - 2 + i;
                         const isActive = currentPage === pageNum;
                         return (
-                            <Button key={pageNum} variant={isActive ? "default" : "outline"} size="sm" className={`h-8 w-8 p-0 text-xs ${isActive ? "bg-[var(--blue)] text-white hover:bg-[var(--blue)]/90" : "border-[var(--glass-border)] bg-[var(--fill-tertiary)] hover:bg-[var(--fill-secondary)] text-[var(--label-primary)]"}`} onClick={() => onPageChange(pageNum)}>
+                            <button
+                                key={pageNum}
+                                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: isActive ? 'none' : '1px solid var(--hairline)', background: isActive ? 'var(--blue)' : 'var(--fill-tertiary)', color: isActive ? '#fff' : 'var(--label-secondary)', fontSize: 12, fontWeight: 600, cursor: 'default' }}
+                                onClick={() => onPageChange(pageNum)}
+                            >
                                 {pageNum}
-                            </Button>
+                            </button>
                         );
                     })}
                 </div>
-                <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-[var(--glass-border)] bg-[var(--fill-tertiary)] hover:bg-[var(--fill-secondary)] text-[var(--label-primary)]" onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>
-                    <ChevronRight className="h-4 w-4" />
-                </Button>
+                <button
+                    style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: '1px solid var(--hairline)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', cursor: 'default', opacity: currentPage >= totalPages ? 0.4 : 1 }}
+                    onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}
+                >
+                    <ChevronRight style={{ width: 14, height: 14 }} />
+                </button>
             </div>
         </div>
     );

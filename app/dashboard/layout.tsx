@@ -7,7 +7,7 @@ import {
     LayoutDashboard, Mail, MessageCircle, Mic, Settings,
     LogOut, ChevronDown, Wallet, BarChart2, Users, Send,
     Key, ExternalLink, Inbox, AlertCircle, UserMinus,
-    MessageSquare, Phone, Activity, Globe, Menu, X as XIcon
+    MessageSquare, Phone, Globe, Menu, X as XIcon
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -59,7 +59,6 @@ const dashboardConfig: Record<string, { label: string; color: string; icon: any;
             { title: "Dashboard", href: "/dashboard/voice", icon: LayoutDashboard },
             { title: "Call Logs", href: "/dashboard/voice/logs", icon: Phone },
             { title: "Analytics", href: "/dashboard/voice/analytics", icon: BarChart2 },
-            { title: "Calculator", href: "/dashboard/voice/calculator", icon: Activity },
         ],
     },
 };
