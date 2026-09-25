@@ -101,12 +101,18 @@ export function TotalRepliesView({ leads = [], dateRange, onViewLead }: { leads?
             });
         }
 
-        // --- Email Logic --- (source of truth: email_reply_track, e.g. "Yes - email done on <ISO>")
+        // --- Email Logic ---
+        // email_reply_track / email_replied are generic "this lead replied" flags
+        // shared across channels (WhatsApp automations set them too), so alone
+        // they aren't proof of an actual email reply. Require a real email
+        // address AND a non-empty parsed email_conversation thread as well.
         const emailTrack = lead.email_reply_track;
-        const hasEmail = isReplyTrackPositive(emailTrack) || !!lead.email_replied;
+        const emailConv = parseJsonArray(lead.email_conversation);
+        const hasEmail = (isReplyTrackPositive(emailTrack) || !!lead.email_replied)
+            && !!lead.email && String(lead.email).trim() !== ""
+            && emailConv.length > 0;
 
         if (hasEmail) {
-            const emailConv = parseJsonArray(lead.email_conversation);
             const trackDate = parseTrackDate(emailTrack);
             const emailDate = trackDate
                 || (coerceTimestamp(lead.last_activity) ? new Date(coerceTimestamp(lead.last_activity)!) : null)

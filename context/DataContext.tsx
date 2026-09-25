@@ -45,6 +45,11 @@ export interface VoiceMetrics {
     completedCalls: number;
     answeredCalls: number;
     successRate: number;
+    // Overall (not board-split) rates across every call in range — "completed"
+    // means status assistant-ended-call or customer-ended-call.
+    pickupRate: number;
+    completionRate: number;
+    positiveRate: number;
     b2bCalls: number;
     b2cCalls: number;
     b2bConnected: number;

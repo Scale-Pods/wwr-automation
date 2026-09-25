@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { WhatsAppChatDetail } from "@/components/dashboard/whatsapp-chat-detail";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -171,7 +170,7 @@ export default function WhatsappChatPage() {
 
     const renderPageButton = (page: number) => (
         <Button key={page} variant={currentPage === page ? "default" : "outline"} size="sm"
-            className={`h-8 w-8 text-xs font-bold ${currentPage === page ? "bg-slate-900 text-white" : "text-slate-600"}`}
+            className={`h-7 w-7 p-0 text-xs font-bold ${currentPage === page ? "bg-slate-900 text-white" : "text-slate-600"}`}
             onClick={() => setCurrentPage(page)}>
             {page}
         </Button>
@@ -183,11 +182,11 @@ export default function WhatsappChatPage() {
             for (let i = 1; i <= totalPages; i++) items.push(renderPageButton(i));
         } else {
             items.push(renderPageButton(1));
-            if (currentPage > 3) items.push(<span key="dots-1" className="flex items-center justify-center w-8 h-8 text-slate-400"><MoreHorizontal className="h-4 w-4" /></span>);
+            if (currentPage > 3) items.push(<span key="dots-1" className="flex items-center justify-center w-7 h-7 text-slate-400"><MoreHorizontal className="h-3.5 w-3.5" /></span>);
             const start = Math.max(2, currentPage - 1);
             const end = Math.min(totalPages - 1, currentPage + 1);
             for (let i = start; i <= end; i++) if (i > 1 && i < totalPages) items.push(renderPageButton(i));
-            if (currentPage < totalPages - 2) items.push(<span key="dots-2" className="flex items-center justify-center w-8 h-8 text-slate-400"><MoreHorizontal className="h-4 w-4" /></span>);
+            if (currentPage < totalPages - 2) items.push(<span key="dots-2" className="flex items-center justify-center w-7 h-7 text-slate-400"><MoreHorizontal className="h-3.5 w-3.5" /></span>);
             items.push(renderPageButton(totalPages));
         }
         return items;
@@ -453,9 +452,9 @@ function CustomerRow({ lead, onClick }: { lead: any; onClick: () => void }) {
                         <TooltipTrigger asChild>
                             <div>
                                 {s.replied ? (
-                                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none text-[10px] font-bold">REPLIED</Badge>
+                                    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, letterSpacing: "0.03em", background: "rgba(48,209,88,0.12)", color: "var(--green)" }}>REPLIED</span>
                                 ) : (
-                                    <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-200">SENT</Badge>
+                                    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, letterSpacing: "0.03em", background: "var(--fill-tertiary)", color: "var(--label-tertiary)", border: "1px solid var(--hairline)" }}>SENT</span>
                                 )}
                             </div>
                         </TooltipTrigger>
@@ -483,10 +482,10 @@ function CustomerRow({ lead, onClick }: { lead: any; onClick: () => void }) {
 function MessageStatusBadge({ index, status, sentAt }: { index: number; status: string; sentAt: string | null }) {
     if (!status) return null;
     const formatted = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-    let badgeClass = "bg-slate-100 text-slate-600 border-slate-200";
-    if (formatted.includes("Deliver")) badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-100";
-    if (formatted.includes("Read")) badgeClass = "bg-blue-50 text-blue-700 border-blue-100";
-    if (formatted.includes("Fail")) badgeClass = "bg-red-50 text-red-700 border-red-100";
+    let pillStyle: React.CSSProperties = { background: "var(--fill-tertiary)", color: "var(--label-tertiary)" };
+    if (formatted.includes("Deliver")) pillStyle = { background: "rgba(48,209,88,0.12)", color: "var(--green)" };
+    if (formatted.includes("Read")) pillStyle = { background: "rgba(10,132,255,0.10)", color: "var(--blue)" };
+    if (formatted.includes("Fail")) pillStyle = { background: "rgba(255,69,58,0.10)", color: "var(--red)" };
 
     const tsDate = coerceTimestamp(sentAt);
     const tooltipText = tsDate ? new Date(tsDate).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
@@ -497,7 +496,7 @@ function MessageStatusBadge({ index, status, sentAt }: { index: number; status: 
                 <TooltipTrigger asChild>
                     <div className="flex items-center gap-1.5 w-full justify-center cursor-help">
                         <span className="text-[9px] text-slate-400 font-mono select-none">{index}</span>
-                        <Badge variant="outline" className={`h-5 px-1.5 text-[9px] font-bold uppercase tracking-wider ${badgeClass}`}>{formatted}</Badge>
+                        <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", ...pillStyle }}>{formatted}</span>
                     </div>
                 </TooltipTrigger>
                 {tooltipText && (

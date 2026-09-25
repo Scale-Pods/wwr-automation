@@ -22,7 +22,12 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
     const [transcriptCopied, setTranscriptCopied] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
 
+    // /api/calls/[id] (fullCall) fetches live from Vapi/ElevenLabs and never
+    // carries sentiment/note — those only exist on the list row from
+    // /api/calls (call), joined from the lead's call_N_sentiment/note slots.
     const displayCall = fullCall || call || {};
+    const callSentiment = call?.sentiment ?? fullCall?.sentiment ?? null;
+    const callNote = call?.note ?? fullCall?.note ?? null;
     const audioUrl = displayCall.audio_url || displayCall.recordingUrl || null;
 
     useEffect(() => {
@@ -292,6 +297,26 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                         <StatBox label="Duration" value={durationDisplay} icon={Clock} color="var(--blue)" />
                         {(displayCall.metadata?.charging?.call_charge > 0) && (
                             <StatBox label="Call Cost" value={`${displayCall.metadata.charging.call_charge} cr`} icon={Phone} color="var(--orange)" />
+                        )}
+
+                        {(callSentiment || callNote) && (
+                            <>
+                                <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--label-tertiary)', margin: '8px 0 0' }}>Sentiment</p>
+                                {callSentiment && (
+                                    <span style={{
+                                        alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20,
+                                        fontSize: 11, fontWeight: 700, textTransform: 'capitalize',
+                                        background: String(callSentiment).toLowerCase().includes('positive') ? 'rgba(48,209,88,0.14)' : String(callSentiment).toLowerCase().includes('negative') ? 'rgba(255,69,58,0.12)' : 'rgba(10,132,255,0.12)',
+                                        color: String(callSentiment).toLowerCase().includes('positive') ? 'var(--green)' : String(callSentiment).toLowerCase().includes('negative') ? 'var(--red)' : 'var(--blue)',
+                                    }}>{callSentiment}</span>
+                                )}
+                                {callNote && (
+                                    <div style={{ background: 'var(--fill-quaternary)', borderRadius: 9, padding: '9px 11px', marginTop: callSentiment ? 4 : 0 }}>
+                                        <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', margin: '0 0 3px' }}>AI Note</p>
+                                        <p style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--label-secondary)', margin: 0, whiteSpace: 'pre-wrap' }}>{callNote}</p>
+                                    </div>
+                                )}
+                            </>
                         )}
 
                         <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--label-tertiary)', margin: '8px 0 0' }}>Call Info</p>

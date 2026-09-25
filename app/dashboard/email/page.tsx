@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { subDays } from "date-fns";
 import { useData } from "@/context/DataContext";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { coerceTimestamp, isReplyTrackPositive } from "@/lib/outreach-types";
+import { coerceTimestamp, hasEmailReply } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
 import { matchesBoard, type EmailBoardKey } from "@/lib/email-board";
@@ -92,7 +92,7 @@ export default function EmailDashboardPage() {
                     if (s.n >= 1 && s.n <= 5) perStep[s.n - 1]++;
                 }
             });
-            if (isReplyTrackPositive(lead.email_reply_track)) replyCount++;
+            if (hasEmailReply(lead)) replyCount++;
             const sent = String(lead.email_sentiment || "").toLowerCase();
             if (sent.includes("positive")) posSentiment++;
             if (sent.includes("negative")) negSentiment++;

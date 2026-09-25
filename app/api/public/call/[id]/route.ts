@@ -49,7 +49,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
     try {
         // 1. Resolve the lead.
-        const leadCols = enc('lead_id,crm_id,full_name,first_name,last_name,phone');
+        const leadCols = enc('lead_id,crm_id,full_name,first_name,last_name,phone,call_1_sentiment,call_1_note,call_2_sentiment,call_2_note,call_3_sentiment,call_3_note');
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
         let leads = await tryFetch(`${base}/${OUTREACH_TABLE}?select=${leadCols}&crm_id=eq.${enc(rawId)}&limit=5`);
         if (!leads.length && isUuid) {
@@ -82,6 +82,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
         }
 
+        // call_1/2/3_sentiment+note on the lead row are assigned in chronological
+        // order (n8n fills the first empty slot 1→3 as calls happen), so the
+        // oldest call maps to slot 1, next to slot 2, etc.
+        const slotFields = [
+            { sentiment: lead.call_1_sentiment || null, note: lead.call_1_note || null },
+            { sentiment: lead.call_2_sentiment || null, note: lead.call_2_note || null },
+            { sentiment: lead.call_3_sentiment || null, note: lead.call_3_note || null },
+        ];
+
+        // Slot numbers (1/2/3) must be assigned across ALL attempts in chronological
+        // order BEFORE dropping empty ones — a no-transcript call 2 still consumes
+        // slot 2 in Supabase, so filtering first would shift call 3's sentiment/note
+        // onto what displays as "call 2".
         const calls = Array.from(byId.values())
             .map(c => {
                 const turns = visibleTurns(parseCallTranscript(c));
@@ -94,7 +107,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                     transcript: turns,
                 };
             })
-            // Unanswered / empty attempts add nothing to a shared view.
+            .sort((a, b) => (a.startedAt ? new Date(a.startedAt).getTime() : 0) - (b.startedAt ? new Date(b.startedAt).getTime() : 0))
+            .map((c, i) => ({ ...c, callSlot: i + 1, sentiment: slotFields[i]?.sentiment ?? null, note: slotFields[i]?.note ?? null }))
+            // Unanswered / empty attempts add nothing to a shared view — drop after
+            // slot assignment, not before.
             .filter(c => c.transcript.length > 0 || c.recordingUrl)
             .sort((a, b) => (b.startedAt ? new Date(b.startedAt).getTime() : 0) - (a.startedAt ? new Date(a.startedAt).getTime() : 0));
 

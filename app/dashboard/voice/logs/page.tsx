@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, ChevronLeft, ChevronRight, User, Download, Search, Info, Activity, Phone } from "lucide-react";
+import { RefreshCw, ChevronLeft, ChevronRight, User, Search, Info, Activity } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -107,14 +107,12 @@ export default function VoiceLogsPage() {
     const [selectedCall, setSelectedCall] = useState<any>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
-    const [statusFilter, setStatusFilter] = useState("all");
+    const [sentimentFilter, setSentimentFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
-    const [accountFilter, setAccountFilter] = useState("vapi");
+    const [accountFilter, setAccountFilter] = useState("all");
     const [phoneFilter, setPhoneFilter] = useState("");
     const [sortBy, setSortBy] = useState("newest");
-    const [regionFilter, setRegionFilter] = useState("all");
     const [costModalOpen, setCostModalOpen] = useState(false);
-    const [exporting, setExporting] = useState(false);
 
     useEffect(() => {
         setDateRange({ from: subDays(new Date(), 7), to: new Date() });
@@ -167,16 +165,26 @@ export default function VoiceLogsPage() {
         setAllCallsMapped(mappedCalls);
     }, [globalCalls, leads, loadingLeads]);
 
+    // Board/account dropdown options are built from whatever vapi_account
+    // values actually appear in the data (e.g. "Residential leads", "Business
+    // leads", "Commercial leads", "called leads") — never a hardcoded list.
+    const accountOptions = Array.from(
+        new Set(allCallsMapped.map((c: any) => c.vapiAccount).filter(Boolean))
+    ).sort();
+
     useEffect(() => {
         setCurrentPage(1);
-    }, [dateRange, statusFilter, typeFilter, accountFilter, phoneFilter, sortBy, regionFilter]);
+    }, [dateRange, sentimentFilter, typeFilter, accountFilter, phoneFilter, sortBy]);
 
     useEffect(() => {
         const filteredCalls = allCallsMapped.filter((call: any) => {
-            if (accountFilter === 'vapi' && call.source !== 'vapi') return false;
-            if (accountFilter === 'vapi-b2b' && (call.source !== 'vapi' || (call.vapiAccount || '').toUpperCase() !== 'B2B')) return false;
-            if (accountFilter === 'vapi-b2c' && (call.source !== 'vapi' || (call.vapiAccount || '').toUpperCase() !== 'B2C')) return false;
-            if (statusFilter !== "all" && call.status !== statusFilter) return false;
+            if (accountFilter !== 'all' && call.vapiAccount !== accountFilter) return false;
+            if (sentimentFilter !== "all") {
+                const s = String(call.sentiment || "").toLowerCase();
+                if (sentimentFilter === "positive" && !s.includes("positive")) return false;
+                if (sentimentFilter === "negative" && !s.includes("negative")) return false;
+                if (sentimentFilter === "neutral" && (s.includes("positive") || s.includes("negative"))) return false;
+            }
             if (typeFilter !== "all") {
                 const normalizedCallType = (call.type || (call.isInbound ? "Inbound" : "Outbound")).toLowerCase();
                 const isSecondaryLeads = call.assistantId === '560ca61b-8cd3-4b5f-996b-2966abfa37fd';
@@ -192,21 +200,6 @@ export default function VoiceLogsPage() {
                 const matchesName = (call.name || "Guest").toLowerCase().includes(searchStr);
                 if (!matchesPhone && !matchesName) return false;
             }
-            if (regionFilter !== "all") {
-                const assistantId = call.assistantId;
-                const assistantNum = (call.phoneNumber || call.fromNumber || "").replace(/\D/g, '');
-                const regionMap: Record<string, { nums: string[], ids: string[] }> = {
-                    "uae": { nums: ["97148714150"], ids: ["70f05e16-18f3-4f6e-964a-f47b299c6c1d", "9ac979c3-a0b3-4af6-bb0d-07ddf9c0d1cd"] },
-                    "us": { nums: ["14782159151", "17624000439"], ids: ["b35e3032-7865-4913-ba22-a913b5d4117b"] },
-                    "uk": { nums: ["447462179309", "7462179309"], ids: ["918c25eb-9882-452e-86df-b4851d464852"] }
-                };
-                const target = regionMap[regionFilter];
-                if (target) {
-                    const matchesNum = assistantNum && target.nums.some(n => assistantNum.endsWith(n) || n.endsWith(assistantNum));
-                    const matchesId = assistantId && target.ids.includes(assistantId);
-                    if (!matchesNum && !matchesId) return false;
-                }
-            }
             return true;
         });
 
@@ -218,38 +211,10 @@ export default function VoiceLogsPage() {
         });
 
         setCalls(sortedCalls);
-    }, [allCallsMapped, dateRange, statusFilter, typeFilter, accountFilter, phoneFilter, sortBy, regionFilter]);
+    }, [allCallsMapped, dateRange, sentimentFilter, typeFilter, accountFilter, phoneFilter, sortBy]);
 
     const handleRefresh = () => {
         refreshCalls({ from: dateRange?.from, to: dateRange?.to || dateRange?.from, includeElevenLabs: false, provider: 'vapi', force: true });
-    };
-
-    const handleExport = async () => {
-        if (calls.length === 0) return;
-        setExporting(true);
-        try {
-            const headers = ["Name", "Phone", "Dial Code", "Country", "Type", "Duration (sec)", "Duration (min)", "Agent Cost", "Telephony Cost", "Total Cost", "Status", "Date"];
-            const csvData = calls.map(call => {
-                const agentCost = Number(call.breakdown?.agent ?? call.agentCost ?? 0);
-                const telephony = Number(call.breakdown?.telephony ?? call.telephonyCost ?? 0);
-                const total = Number(call.breakdown?.total ?? (agentCost + telephony));
-                return [
-                    call.name || "Guest", call.phone || "Unknown", call.dialCode || "", call.country || "Unknown",
-                    call.type, call.durationSeconds || 0, ((call.durationSeconds || 0) / 60).toFixed(2),
-                    `$${agentCost.toFixed(3)}`, `$${telephony.toFixed(3)}`, `$${total.toFixed(3)}`,
-                    call.status, call.displayDate,
-                ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
-            });
-            const csvContent = "﻿" + [headers.join(","), ...csvData].join("\n");
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `voice_logs_export_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } catch (err) { console.error("Export error:", err); } finally { setExporting(false); }
     };
 
     const paginatedCalls = calls.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -277,13 +242,6 @@ export default function VoiceLogsPage() {
                     <p style={{ fontSize: 13, color: 'var(--label-secondary)', marginTop: 2 }}>Comprehensive history across all accounts and providers.</p>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-                    <button
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)', background: exporting || calls.length === 0 ? 'var(--fill-quaternary)' : 'rgba(48,209,88,0.10)', color: exporting || calls.length === 0 ? 'var(--label-tertiary)' : 'var(--green)', fontSize: 12, fontWeight: 500, cursor: 'default', opacity: calls.length === 0 ? 0.5 : 1 }}
-                        onClick={handleExport}
-                        disabled={exporting || calls.length === 0}
-                    >
-                        <Download style={{ width: 13, height: 13 }} /> {exporting ? 'Exporting...' : 'Export'}
-                    </button>
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
                     <button
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', fontSize: 12, fontWeight: 500, cursor: 'default' }}
@@ -297,129 +255,134 @@ export default function VoiceLogsPage() {
                 </div>
             </div>
 
-            {/* Filters Bar */}
-            <div className="liquid-card" style={{ padding: '10px 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-                <div style={{ position: 'relative', width: 180 }}>
-                    <Search style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', width: 13, height: 13, color: 'var(--label-tertiary)' }} />
-                    <Input
-                        placeholder="Search name or phone..."
-                        style={{ paddingLeft: 28, height: 34, background: 'var(--fill-tertiary)', border: '1px solid var(--glass-border)', color: 'var(--label-primary)', fontSize: 12, borderRadius: 'var(--radius-md)' }}
-                        value={phoneFilter}
-                        onChange={(e) => setPhoneFilter(e.target.value)}
-                    />
-                </div>
+            {/* Filters + Table */}
+            <div className="email-two-col" style={{ display: 'grid', gap: 16, alignItems: 'start' }}>
+                <aside className="liquid-card email-filter-rail" style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 12, alignSelf: 'start' }}>
+                    <div style={{ position: 'relative' }}>
+                        <Search style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 13, height: 13, color: 'var(--label-tertiary)' }} />
+                        <Input
+                            placeholder="Search name or phone..."
+                            style={{ paddingLeft: 30, height: 36, width: '100%', background: 'var(--fill-tertiary)', border: '1px solid var(--glass-border)', color: 'var(--label-primary)', fontSize: 12, borderRadius: 'var(--radius-md)' }}
+                            value={phoneFilter}
+                            onChange={(e) => setPhoneFilter(e.target.value)}
+                        />
+                    </div>
 
-                <Select value={accountFilter} onValueChange={setAccountFilter}>
-                    <SelectTrigger style={{ width: 160, height: 34, fontSize: 12 }}>
-                        <SelectValue placeholder="Account / Provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="vapi">All Vapi Calls</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger style={{ width: 110, height: 34, fontSize: 12 }}><SelectValue placeholder="Call Type" /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="Inbound">Inbound</SelectItem>
-                        <SelectItem value="Outbound">Outbound</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger style={{ width: 110, height: 34, fontSize: 12 }}><SelectValue placeholder="Status" /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="answered">Answered / Done</SelectItem>
-                        <SelectItem value="failed">Failed / Error</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Select value={regionFilter} onValueChange={setRegionFilter}>
-                    <SelectTrigger style={{ width: 150, height: 34, fontSize: 12, whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                            <Phone style={{ width: 12, height: 12, color: 'var(--label-tertiary)', flexShrink: 0 }} />
-                            <SelectValue placeholder="Region" />
-                        </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Regions</SelectItem>
-                        <SelectItem value="us">United States</SelectItem>
-                        <SelectItem value="uk">United Kingdom</SelectItem>
-                        <SelectItem value="uae">UAE (Dubai)</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger style={{ width: 130, height: 34, fontSize: 12 }}><SelectValue placeholder="Sort By" /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="newest">Newest First</SelectItem>
-                        <SelectItem value="oldest">Oldest First</SelectItem>
-                        <SelectItem value="longest">Longest Duration</SelectItem>
-                        <SelectItem value="shortest">Shortest Duration</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {/* Table */}
-            <div className="liquid-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead style={{ borderBottom: '1px solid var(--hairline)' }}>
-                            <tr style={{ background: 'var(--fill-quaternary)' }}>
-                                {['Name', 'Guest Number', 'Type', 'Duration', 'Country / Code', 'Cost', 'Status', 'Date & Time'].map(h => (
-                                    <th key={h} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', whiteSpace: 'nowrap' }}>{h}</th>
+                    <div>
+                        <label style={{ display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', marginBottom: 5 }}>Board</label>
+                        <Select value={accountFilter} onValueChange={setAccountFilter}>
+                            <SelectTrigger style={{ width: '100%', height: 36, fontSize: 12 }}><SelectValue placeholder="Board" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Boards</SelectItem>
+                                {accountOptions.map(acc => (
+                                    <SelectItem key={acc} value={acc}>{acc}</SelectItem>
                                 ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {calls.length === 0 && !loading ? (
-                                <tr>
-                                    <td colSpan={8} style={{ padding: '60px 16px', textAlign: 'center', fontSize: 13, color: 'var(--label-tertiary)' }}>No calls matching filters.</td>
-                                </tr>
-                            ) : (
-                                paginatedCalls.map((call) => (
-                                    <tr
-                                        key={call.id}
-                                        style={{ borderBottom: '1px solid var(--hairline)', cursor: 'pointer', transition: 'background 120ms' }}
-                                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--fill-quaternary)')}
-                                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                                        onClick={() => { setSelectedCall(call); setModalOpen(true); }}
-                                    >
-                                        <DynamicRowCells call={call} leads={leads} />
-                                        <td style={{ padding: '10px 14px' }}>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 'var(--radius-xs)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: call.status === 'answered' ? 'rgba(48,209,88,0.12)' : 'var(--fill-tertiary)', color: call.status === 'answered' ? 'var(--green)' : 'var(--label-tertiary)', border: `1px solid ${call.status === 'answered' ? 'transparent' : 'var(--hairline)'}` }}>
-                                                {call.status}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--label-tertiary)', whiteSpace: 'nowrap' }}>{call.displayDate}</td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                {/* Footer */}
-                <div style={{ padding: '12px 16px', borderTop: '1px solid var(--hairline)', background: 'var(--fill-quaternary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <p style={{ fontSize: 12, color: 'var(--label-tertiary)' }}>
-                        Showing <span style={{ fontWeight: 700, color: 'var(--label-primary)' }}>{calls.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–{Math.min(currentPage * itemsPerPage, calls.length)}</span> of <span style={{ fontWeight: 700, color: 'var(--label-primary)' }}>{calls.length}</span> calls
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <button
-                            style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: '1px solid var(--hairline)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', cursor: 'default', opacity: currentPage === 1 ? 0.4 : 1 }}
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                        >
-                            <ChevronLeft style={{ width: 14, height: 14 }} />
-                        </button>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--label-secondary)', padding: '0 10px' }}>Page {currentPage}</span>
-                        <button
-                            style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: '1px solid var(--hairline)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', cursor: 'default', opacity: currentPage >= Math.ceil(calls.length / itemsPerPage) ? 0.4 : 1 }}
-                            onClick={() => setCurrentPage(p => Math.min(Math.ceil(calls.length / itemsPerPage), p + 1))} disabled={currentPage >= Math.ceil(calls.length / itemsPerPage)}
-                        >
-                            <ChevronRight style={{ width: 14, height: 14 }} />
-                        </button>
+                    <div>
+                        <label style={{ display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', marginBottom: 5 }}>Call Type</label>
+                        <Select value={typeFilter} onValueChange={setTypeFilter}>
+                            <SelectTrigger style={{ width: '100%', height: 36, fontSize: 12 }}><SelectValue placeholder="Call Type" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                <SelectItem value="Inbound">Inbound</SelectItem>
+                                <SelectItem value="Outbound">Outbound</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', marginBottom: 5 }}>Sentiment</label>
+                        <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
+                            <SelectTrigger style={{ width: '100%', height: 36, fontSize: 12 }}><SelectValue placeholder="Sentiment" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Sentiment</SelectItem>
+                                <SelectItem value="positive">Positive</SelectItem>
+                                <SelectItem value="neutral">Neutral</SelectItem>
+                                <SelectItem value="negative">Negative</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', marginBottom: 5 }}>Sort</label>
+                        <Select value={sortBy} onValueChange={setSortBy}>
+                            <SelectTrigger style={{ width: '100%', height: 36, fontSize: 12 }}><SelectValue placeholder="Sort By" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="newest">Newest First</SelectItem>
+                                <SelectItem value="oldest">Oldest First</SelectItem>
+                                <SelectItem value="longest">Longest Duration</SelectItem>
+                                <SelectItem value="shortest">Shortest Duration</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <button style={{ fontSize: 11, fontWeight: 600, color: 'var(--label-secondary)', background: 'var(--fill-tertiary)', border: '1px solid var(--glass-border)', padding: '7px 12px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', height: 34 }}
+                        onClick={() => { setPhoneFilter(''); setAccountFilter('all'); setTypeFilter('all'); setSentimentFilter('all'); setSortBy('newest'); }}>
+                        Reset Filters
+                    </button>
+                </aside>
+
+                <div className="liquid-card" style={{ padding: 0, overflow: 'hidden', minWidth: 0 }}>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead style={{ borderBottom: '1px solid var(--hairline)' }}>
+                                <tr style={{ background: 'var(--fill-quaternary)' }}>
+                                    {['Name', 'Guest Number', 'Type', 'Duration', 'Country / Code', 'Cost', 'Status', 'Date & Time'].map(h => (
+                                        <th key={h} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', whiteSpace: 'nowrap' }}>{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {calls.length === 0 && !loading ? (
+                                    <tr>
+                                        <td colSpan={8} style={{ padding: '60px 16px', textAlign: 'center', fontSize: 13, color: 'var(--label-tertiary)' }}>No calls matching filters.</td>
+                                    </tr>
+                                ) : (
+                                    paginatedCalls.map((call) => (
+                                        <tr
+                                            key={call.id}
+                                            style={{ borderBottom: '1px solid var(--hairline)', cursor: 'pointer', transition: 'background 120ms' }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--fill-quaternary)')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                            onClick={() => { setSelectedCall(call); setModalOpen(true); }}
+                                        >
+                                            <DynamicRowCells call={call} leads={leads} />
+                                            <td style={{ padding: '10px 14px' }}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 'var(--radius-xs)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: call.status === 'answered' ? 'rgba(48,209,88,0.12)' : 'var(--fill-tertiary)', color: call.status === 'answered' ? 'var(--green)' : 'var(--label-tertiary)', border: `1px solid ${call.status === 'answered' ? 'transparent' : 'var(--hairline)'}` }}>
+                                                    {call.status}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--label-tertiary)', whiteSpace: 'nowrap' }}>{call.displayDate}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid var(--hairline)', background: 'var(--fill-quaternary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                        <p style={{ fontSize: 12, color: 'var(--label-tertiary)' }}>
+                            Showing <span style={{ fontWeight: 700, color: 'var(--label-primary)' }}>{calls.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–{Math.min(currentPage * itemsPerPage, calls.length)}</span> of <span style={{ fontWeight: 700, color: 'var(--label-primary)' }}>{calls.length}</span> calls
+                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <button
+                                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: '1px solid var(--hairline)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', cursor: 'default', opacity: currentPage === 1 ? 0.4 : 1 }}
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                            >
+                                <ChevronLeft style={{ width: 14, height: 14 }} />
+                            </button>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--label-secondary)', padding: '0 10px' }}>Page {currentPage}</span>
+                            <button
+                                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: '1px solid var(--hairline)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', cursor: 'default', opacity: currentPage >= Math.ceil(calls.length / itemsPerPage) ? 0.4 : 1 }}
+                                onClick={() => setCurrentPage(p => Math.min(Math.ceil(calls.length / itemsPerPage), p + 1))} disabled={currentPage >= Math.ceil(calls.length / itemsPerPage)}
+                            >
+                                <ChevronRight style={{ width: 14, height: 14 }} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

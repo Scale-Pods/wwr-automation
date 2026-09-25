@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { format, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
-import { coerceTimestamp, parseJsonArray, isReplyTrackPositive } from "@/lib/outreach-types";
+import { coerceTimestamp, parseJsonArray, hasEmailReply } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
 import { boardOf, boardLabel, type EmailBoardKey } from "@/lib/email-board";
@@ -149,9 +149,9 @@ export default function ReceivedEmailsPage() {
         const out: any[] = [];
 
         (allLeads as OutreachLead[]).forEach((lead, index) => {
-            // Gate purely on email_reply_track carrying a value (e.g. "Yes - email done on <ISO>").
-            if (!isReplyTrackPositive(lead.email_reply_track)) return;
+            if (!hasEmailReply(lead)) return;
             const thread = buildThread(lead);
+            if (thread.length === 0) return;
             const trackDate = extractTrackDate(lead.email_reply_track);
             const lastInbound = [...thread].reverse().find(m => m.direction === "in");
             const replyDate = trackDate || lastInbound?.date || lead.last_activity || lead.updated_at || lead.created_at || new Date().toISOString();

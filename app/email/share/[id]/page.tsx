@@ -174,12 +174,26 @@ export default function PublicEmailSharePage({ params }: { params: Promise<{ id:
             <div style={{ flex: 1, width: "100%", maxWidth: 760, margin: "0 auto", padding: "24px 16px" }}>
                 <div style={{ background: "#fff", borderRadius: 20, boxShadow: "0 1px 3px rgba(15,23,42,0.06), 0 8px 28px rgba(15,23,42,0.07)", overflow: "hidden" }}>
                     <div style={{ padding: "18px 22px", borderBottom: "1px solid #e2e8f0" }}>
-                        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: 0 }}>{data.name || "Email Conversation"}</h1>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                            <h1 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: 0 }}>{data.name || "Email Conversation"}</h1>
+                            {data.email_sentiment && (
+                                <span style={{
+                                    flexShrink: 0, display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 20, fontSize: 10, fontWeight: 700, textTransform: "capitalize",
+                                    background: data.email_sentiment.toLowerCase().includes("positive") ? "rgba(34,197,94,0.12)" : data.email_sentiment.toLowerCase().includes("negative") ? "rgba(239,68,68,0.10)" : "rgba(148,163,184,0.14)",
+                                    color: data.email_sentiment.toLowerCase().includes("positive") ? "#16a34a" : data.email_sentiment.toLowerCase().includes("negative") ? "#dc2626" : "#64748b",
+                                }}>{data.email_sentiment}</span>
+                            )}
+                        </div>
                         <p style={{ fontSize: 12, color: "#64748b", margin: "3px 0 0" }}>
                             {data.email || ""}
-                            {data.email_sentiment ? ` · ${data.email_sentiment}` : ""}
                             {` · ${thread.length} message${thread.length === 1 ? "" : "s"}`}
                         </p>
+                        {data.email_note && (
+                            <div style={{ marginTop: 10, padding: "8px 11px", borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                                <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", margin: "0 0 3px" }}>AI Note</p>
+                                <p style={{ fontSize: 12.5, lineHeight: 1.55, color: "#334155", margin: 0, whiteSpace: "pre-wrap" }}>{data.email_note}</p>
+                            </div>
+                        )}
                     </div>
 
                     <div style={{ padding: "8px 22px 22px", display: "flex", flexDirection: "column", gap: 10 }}>

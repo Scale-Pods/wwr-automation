@@ -23,7 +23,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { subDays, format } from "date-fns";
 import { useData } from "@/context/DataContext";
-import { coerceTimestamp, isReplyTrackPositive } from "@/lib/outreach-types";
+import { coerceTimestamp, isReplyTrackPositive, hasEmailReply } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
 import { matchesBoard, type EmailBoardKey } from "@/lib/email-board";
@@ -62,7 +62,7 @@ export default function EmailAnalyticsPage() {
         let sent = 0, replies = 0, posSentiment = 0, negSentiment = 0;
         filtered.forEach(lead => {
             sent += lead.email_slots.length;
-            if (isReplyTrackPositive(lead.email_reply_track)) replies++;
+            if (hasEmailReply(lead)) replies++;
             const sentiment = String(lead.email_sentiment || "").toLowerCase();
             if (sentiment.includes("positive")) posSentiment++;
             if (sentiment.includes("negative")) negSentiment++;
@@ -91,7 +91,7 @@ export default function EmailAnalyticsPage() {
             const dateKey = d.toISOString().split("T")[0];
 
             const sent = lead.email_slots.length;
-            const isReplied = isReplyTrackPositive(lead.email_reply_track);
+            const isReplied = hasEmailReply(lead);
 
             if (!counts[dateKey]) counts[dateKey] = { date: dateKey, sent: 0, replies: 0 };
             counts[dateKey].sent += sent;

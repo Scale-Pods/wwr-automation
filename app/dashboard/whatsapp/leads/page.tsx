@@ -1,7 +1,6 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
     Search,
     Filter,
@@ -50,7 +49,6 @@ function getLeadDate(lead: any): Date | null {
 export default function WhatsappLeadsPage() {
     const [waLeads, setWaLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedLeadIdForChat, setSelectedLeadIdForChat] = useState<string | null>(null);
     const [selectedLeadObj, setSelectedLeadObj] = useState<any | null>(null);
@@ -96,6 +94,8 @@ export default function WhatsappLeadsPage() {
         const list: UnifiedLead[] = [];
 
         waLeads.forEach((lead, idx) => {
+            // Only leads with an actual inbound WhatsApp message belong on this page.
+            if (!lead.last_whatsapp_message || !String(lead.last_whatsapp_message).trim()) return;
             const id = String(lead.lead_id || lead.crm_id || lead.id || `lead-${idx}`);
             let hasReplied = isReplyTrackPositive(lead.whatsapp_reply_track);
             if (!hasReplied && Array.isArray(lead.whatsapp_conversation)) {
@@ -159,17 +159,6 @@ export default function WhatsappLeadsPage() {
         (currentPage - 1) * leadsPerPage,
         currentPage * leadsPerPage
     );
-
-    const toggleSelectAll = () => {
-        if (selectedLeadIds.length === filteredLeads.length) setSelectedLeadIds([]);
-        else setSelectedLeadIds(filteredLeads.map(l => l.id));
-    };
-
-    const toggleSelect = (id: string) => {
-        setSelectedLeadIds(prev =>
-            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-        );
-    };
 
     return (
         <div className="space-y-5 pb-10 relative min-h-[500px]">
@@ -237,26 +226,12 @@ export default function WhatsappLeadsPage() {
                 </div>
             </div>
 
-            {/* Bulk Action Bar */}
-            {selectedLeadIds.length > 0 && (
-                <div className="liquid-card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--label-primary)' }}>{selectedLeadIds.length} leads selected</span>
-                    <button style={{ fontSize: 12, fontWeight: 500, color: 'var(--label-secondary)', background: 'var(--fill-tertiary)', border: '1px solid var(--glass-border)', padding: '4px 12px', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>Export Selected</button>
-                </div>
-            )}
-
             {/* Table */}
             <div className="liquid-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead style={{ borderBottom: '1px solid var(--hairline)' }}>
                             <tr style={{ background: 'var(--fill-quaternary)' }}>
-                                <th style={{ padding: '10px 16px', width: 40 }}>
-                                    <Checkbox
-                                        checked={selectedLeadIds.length === filteredLeads.length && filteredLeads.length > 0}
-                                        onCheckedChange={toggleSelectAll}
-                                    />
-                                </th>
                                 <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)' }}>Name</th>
                                 <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)' }}>Phone</th>
                                 <th style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', textAlign: 'center' }}>Reply Status</th>
@@ -267,14 +242,14 @@ export default function WhatsappLeadsPage() {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={6} style={{ padding: '80px 16px', textAlign: 'center', color: 'var(--label-tertiary)' }}>
+                                    <td colSpan={5} style={{ padding: '80px 16px', textAlign: 'center', color: 'var(--label-tertiary)' }}>
                                         <RefreshCw style={{ width: 20, height: 20, margin: '0 auto 8px', animation: 'spin 1s linear infinite', color: 'var(--green)' }} />
                                         Loading WhatsApp leads...
                                     </td>
                                 </tr>
                             ) : filteredLeads.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} style={{ padding: '80px 16px', textAlign: 'center', color: 'var(--label-tertiary)' }}>
+                                    <td colSpan={5} style={{ padding: '80px 16px', textAlign: 'center', color: 'var(--label-tertiary)' }}>
                                         No leads found for this date range.
                                     </td>
                                 </tr>
@@ -294,12 +269,6 @@ export default function WhatsappLeadsPage() {
                                             onMouseLeave={e => (e.currentTarget.style.background = lead.isPfLead ? 'rgba(255,204,0,0.07)' : 'transparent')}
                                             onClick={() => { setSelectedLeadIdForChat(lead.id); setSelectedLeadObj(lead.raw); }}
                                         >
-                                            <td style={{ padding: '12px 16px' }} onClick={(e) => e.stopPropagation()}>
-                                                <Checkbox
-                                                    checked={selectedLeadIds.includes(lead.id)}
-                                                    onCheckedChange={() => toggleSelect(lead.id)}
-                                                />
-                                            </td>
                                             <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: 'var(--label-primary)' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                     {lead.name}

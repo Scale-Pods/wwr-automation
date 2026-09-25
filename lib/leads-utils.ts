@@ -9,6 +9,7 @@
 import {
     OutreachLead, WaSlot, EmailSlot, CallSlot,
     isReplyTrackPositive, parseJsonArray, parseJsonObject, coerceTimestamp,
+    hasEmailReply,
 } from './outreach-types';
 
 /** Kept for backwards-compat with old callers. Only `outreach` is read now. */
@@ -95,11 +96,17 @@ export function normalizeOutreachRow(r: any): OutreachLead {
             return role === 'user' || role === 'User' || role === 'customer';
         });
 
-    const emailReplied = isReplyTrackPositive(r.email_reply_track)
+    // email_reply_track is a generic "this lead replied" flag shared across
+    // channels (WhatsApp automations set it too), so it alone isn't proof of
+    // an actual email reply — require a real email address as well.
+    const hasRealEmail = !!r.email && String(r.email).trim() !== '';
+    const emailReplied = hasRealEmail && (
+        hasEmailReply(r)
         || emailConversation.some((m: any) => {
             const role = m?.role || m?.direction || m?.type;
             return role === 'user' || role === 'inbound' || role === 'received';
-        });
+        })
+    );
 
     const callReplied = isReplyTrackPositive(r.call_reply_track);
 

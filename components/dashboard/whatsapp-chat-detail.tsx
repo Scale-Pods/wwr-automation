@@ -239,110 +239,88 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                 </div>
             </div>
 
-            <div className="detail-two-col" style={{ display: "grid", gap: 12, flex: 1, overflow: "hidden", minHeight: 0 }}>
-                <div style={{ display: "flex", flexDirection: "column", background: "var(--fill-quaternary)", border: "1px solid var(--hairline)", borderRadius: 10, overflow: "hidden", height: "100%", minHeight: 0 }}>
-                    <div style={{ borderBottom: "1px solid var(--hairline)", padding: "9px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--label-tertiary)", display: "flex", alignItems: "center", gap: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                            <MessageSquare style={{ width: 12, height: 12 }} /> Conversation
-                        </span>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "var(--fill-secondary)", color: "var(--label-secondary)", border: "1px solid var(--hairline)" }}>{messages.length} msg</span>
-                    </div>
-
-                    <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-                        {messages.length === 0 ? (
-                            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--label-tertiary)", gap: 8 }}>
-                                <MessageSquare style={{ width: 20, height: 20, opacity: 0.2 }} />
-                                <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>No Messages Found</p>
-                            </div>
-                        ) : (
-                            messages.map((msg, idx) => {
-                                let tsPill = null;
-                                const rawStatus = msg.tsStatus;
-                                if (rawStatus) {
-                                    const statusStr = String(rawStatus).trim();
-                                    const formatted = statusStr.charAt(0).toUpperCase() + statusStr.slice(1).toLowerCase();
-                                    let pillBg = "var(--fill-secondary)";
-                                    let pillColor = "var(--label-tertiary)";
-                                    if (formatted.includes("Read")) { pillBg = "rgba(10,132,255,0.10)"; pillColor = "var(--blue)"; }
-                                    if (formatted.includes("Fail")) { pillBg = "rgba(255,69,58,0.10)"; pillColor = "var(--red)"; }
-                                    if (formatted.includes("Sent") || formatted.includes("Deliver")) { pillBg = "rgba(48,209,88,0.10)"; pillColor = "var(--green)"; }
-                                    tsPill = <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 5, background: pillBg, color: pillColor }}>{formatted}</span>;
-                                }
-
-                                const isUser = msg.type === "user";
-                                const intent = msg.intent;
+            {(lead.wa_sentiment || lead.wa_note) && (
+                <div style={{ marginBottom: 12, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {lead.wa_sentiment && (
+                        <span style={{
+                            alignSelf: "flex-start", display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 20,
+                            fontSize: 11, fontWeight: 700, textTransform: "capitalize",
+                            ...sentimentStyle(lead.wa_sentiment),
+                        }}>{lead.wa_sentiment}</span>
+                    )}
+                    {lead.wa_note && (
+                        <div style={{ background: "var(--fill-quaternary)", borderRadius: 10, padding: "8px 11px" }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)", margin: "0 0 3px" }}>AI Note</p>
+                            {String(lead.wa_note).split("|").map((part: string, i: number) => {
+                                const t = part.trim();
+                                if (!t) return null;
                                 return (
-                                    <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-start" : "flex-end", width: "100%" }}>
-                                        <div style={{ maxWidth: "85%", padding: "8px 11px", background: isUser ? "rgba(48,209,88,0.09)" : "var(--fill-tertiary)", border: `1px solid ${isUser ? "rgba(48,209,88,0.18)" : "var(--hairline)"}`, borderRadius: 10, borderTopLeftRadius: isUser ? 3 : 10, borderTopRightRadius: isUser ? 10 : 3 }}>
-                                            <div style={{ marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
-                                                <span style={{ fontSize: 10, fontWeight: 600, color: isUser ? "var(--green)" : "var(--blue)" }}>{msg.label}</span>
-                                                {!isUser && intent && (
-                                                    <span style={{ fontSize: 9, fontWeight: 500, padding: "1px 5px", borderRadius: 4, background: "rgba(175,82,222,0.10)", color: "var(--purple)" }}>
-                                                        {String(intent).length > 30 ? String(intent).substring(0, 30) + "…" : intent}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", color: "var(--label-primary)", margin: 0 }}>
-                                                {isTranslated && translatedMessages[idx] ? translatedMessages[idx] : msg.content}
-                                            </p>
-                                        </div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, paddingLeft: 2, paddingRight: 2 }}>
-                                            {msg.date && (
-                                                <span style={{ fontSize: 10, color: "var(--label-tertiary)" }}>
-                                                    {new Date(msg.date).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
-                                                </span>
-                                            )}
-                                            {tsPill}
-                                        </div>
-                                    </div>
+                                    <p key={i} style={{ fontSize: 12, lineHeight: 1.5, color: "var(--label-secondary)", margin: 0, whiteSpace: "pre-wrap" }}>
+                                        {t}
+                                    </p>
                                 );
-                            })
-                        )}
-                    </div>
-                </div>
-
-                <div className="custom-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", height: "100%", paddingRight: 2, paddingBottom: 8 }}>
-                    <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--label-tertiary)", margin: 0 }}>Engagement</p>
-                    <StatBox label="Total Messages" value={messages.length} icon={MessageSquare} color="var(--blue)" />
-                    <StatBox label="Incoming" value={messages.filter((m: any) => m.type === "user").length} icon={User} color="var(--green)" />
-                    <StatBox label="Outgoing" value={messages.filter((m: any) => m.type === "bot").length} icon={Bot} color="var(--purple)" />
-
-                    <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--label-tertiary)", margin: "8px 0 0" }}>WhatsApp Insight</p>
-                    <div style={{ background: "var(--fill-quaternary)", border: "1px solid var(--hairline)", borderRadius: 9, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
-                        <div>
-                            <span style={{ fontSize: 10, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Sentiment</span>
-                            {lead.wa_sentiment ? (
-                                <div style={{ marginTop: 4 }}>
-                                    <span style={{
-                                        display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 20,
-                                        fontSize: 11, fontWeight: 700, textTransform: "capitalize",
-                                        ...sentimentStyle(lead.wa_sentiment),
-                                    }}>{lead.wa_sentiment}</span>
-                                </div>
-                            ) : (
-                                <p style={{ fontSize: 12, color: "var(--label-tertiary)", margin: "2px 0 0" }}>—</p>
-                            )}
+                            })}
                         </div>
-                        <div>
-                            <span style={{ fontSize: 10, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Note</span>
-                            {lead.wa_note ? (
-                                <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 4 }}>
-                                    {String(lead.wa_note).split("|").map((part: string, i: number) => {
-                                        const t = part.trim();
-                                        if (!t) return null;
-                                        return (
-                                            <p key={i} style={{ fontSize: 11, lineHeight: 1.45, color: "var(--label-secondary)", margin: 0, whiteSpace: "pre-wrap" }}>
-                                                {t}
-                                            </p>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <p style={{ fontSize: 12, color: "var(--label-tertiary)", margin: "2px 0 0" }}>—</p>
-                            )}
-                        </div>
-                    </div>
+                    )}
                 </div>
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 10, flexShrink: 0, fontSize: 11, color: "var(--label-tertiary)" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><MessageSquare style={{ width: 11, height: 11 }} /> {messages.length} total</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><User style={{ width: 11, height: 11, color: "var(--green)" }} /> {messages.filter((m: any) => m.type === "user").length} incoming</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Bot style={{ width: 11, height: 11, color: "var(--purple)" }} /> {messages.filter((m: any) => m.type === "bot").length} outgoing</span>
+            </div>
+
+            <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, minHeight: 0, paddingRight: 2 }}>
+                {messages.length === 0 ? (
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--label-tertiary)", gap: 8 }}>
+                        <MessageSquare style={{ width: 20, height: 20, opacity: 0.2 }} />
+                        <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>No Messages Found</p>
+                    </div>
+                ) : (
+                    messages.map((msg, idx) => {
+                        let tsPill = null;
+                        const rawStatus = msg.tsStatus;
+                        if (rawStatus) {
+                            const statusStr = String(rawStatus).trim();
+                            const formatted = statusStr.charAt(0).toUpperCase() + statusStr.slice(1).toLowerCase();
+                            let pillBg = "var(--fill-secondary)";
+                            let pillColor = "var(--label-tertiary)";
+                            if (formatted.includes("Read")) { pillBg = "rgba(10,132,255,0.10)"; pillColor = "var(--blue)"; }
+                            if (formatted.includes("Fail")) { pillBg = "rgba(255,69,58,0.10)"; pillColor = "var(--red)"; }
+                            if (formatted.includes("Sent") || formatted.includes("Deliver")) { pillBg = "rgba(48,209,88,0.10)"; pillColor = "var(--green)"; }
+                            tsPill = <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 5, background: pillBg, color: pillColor }}>{formatted}</span>;
+                        }
+
+                        const isUser = msg.type === "user";
+                        const intent = msg.intent;
+                        return (
+                            <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-start" : "flex-end", width: "100%" }}>
+                                <div style={{ maxWidth: "85%", padding: "10px 13px", borderRadius: 12, background: isUser ? "rgba(48,209,88,0.09)" : "var(--fill-tertiary)", border: `1px solid ${isUser ? "rgba(48,209,88,0.18)" : "var(--hairline)"}`, borderTopLeftRadius: isUser ? 3 : 12, borderTopRightRadius: isUser ? 12 : 3 }}>
+                                    <div style={{ marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: isUser ? "var(--green)" : "var(--blue)" }}>{msg.label}</span>
+                                        {!isUser && intent && (
+                                            <span style={{ fontSize: 9, fontWeight: 500, padding: "1px 5px", borderRadius: 4, background: "rgba(175,82,222,0.10)", color: "var(--purple)" }}>
+                                                {String(intent).length > 30 ? String(intent).substring(0, 30) + "…" : intent}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p style={{ fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap", color: "var(--label-primary)", margin: 0 }}>
+                                        {isTranslated && translatedMessages[idx] ? translatedMessages[idx] : msg.content}
+                                    </p>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, paddingLeft: 2, paddingRight: 2 }}>
+                                    {msg.date && (
+                                        <span style={{ fontSize: 10, color: "var(--label-tertiary)" }}>
+                                            {new Date(msg.date).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
+                                        </span>
+                                    )}
+                                    {tsPill}
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
             </div>
         </div>
     );
@@ -359,16 +337,3 @@ function sentimentStyle(raw: string): { background: string; color: string } {
     return { background: "var(--fill-secondary)", color: "var(--label-secondary)" };
 }
 
-function StatBox({ label, value, icon: Icon, color }: { label: string; value: number; icon: any; color: string }) {
-    return (
-        <div style={{ padding: "9px 11px", borderRadius: 9, border: "1px solid var(--hairline)", background: "var(--fill-quaternary)", display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}>
-                <Icon style={{ width: 13, height: 13 }} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 10, color: "var(--label-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
-                <span style={{ fontSize: 18, fontWeight: 600, color: "var(--label-primary)", lineHeight: 1.1, marginTop: 1 }}>{value}</span>
-            </div>
-        </div>
-    );
-}

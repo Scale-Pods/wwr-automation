@@ -72,10 +72,10 @@ export default function VoiceAnalyticsPage() {
                     <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--label-primary)' }}>Voice Analytics</h2>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard title="Calls in Range" value={((m?.b2bCalls ?? 0) + (m?.b2cCalls ?? 0) || (m?.totalCalls ?? 0)).toLocaleString()} change="Selected Dates" icon={<Phone style={{ width: 18, height: 18 }} />} color="var(--blue)" />
-                    <StatCard title="Call Pick-up Rate" value={`${(m?.b2bPickupRate || m?.b2cPickupRate || 0).toFixed(1)}%`} change="Picked & duration > 18 sec" icon={<Phone style={{ width: 18, height: 18 }} />} color="var(--purple)" />
-                    <StatCard title="Completion Rate" value={`${(m?.b2bCompletionRate || m?.b2cCompletionRate || 0).toFixed(1)}%`} change="Completed Conversation" icon={<CheckCircle style={{ width: 18, height: 18 }} />} color="var(--green)" />
-                    <StatCard title="Positive Response" value={`${(m?.b2bPositiveRate || m?.b2cPositiveRate || 0).toFixed(1)}%`} change="Positive & Interested" icon={<CheckCircle style={{ width: 18, height: 18 }} />} color="var(--blue)" />
+                    <StatCard title="Calls in Range" value={(m?.totalCalls ?? 0).toLocaleString()} change="Selected Dates" icon={<Phone style={{ width: 18, height: 18 }} />} color="var(--blue)" />
+                    <StatCard title="Call Pick-up Rate" value={`${(m?.pickupRate ?? 0).toFixed(1)}%`} change="Assistant/customer ended call" icon={<Phone style={{ width: 18, height: 18 }} />} color="var(--purple)" />
+                    <StatCard title="Completion Rate" value={`${(m?.completionRate ?? 0).toFixed(1)}%`} change="Completed Conversation" icon={<CheckCircle style={{ width: 18, height: 18 }} />} color="var(--green)" />
+                    <StatCard title="Positive Response" value={`${(m?.positiveRate ?? 0).toFixed(1)}%`} change="Sentiment = Positive" icon={<CheckCircle style={{ width: 18, height: 18 }} />} color="var(--blue)" />
                 </div>
             </div>
 

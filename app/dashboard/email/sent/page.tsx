@@ -17,7 +17,7 @@ import type { OutreachLead } from "@/lib/outreach-types";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
 import { boardOf, matchesBoard, boardLabel, type EmailBoardKey } from "@/lib/email-board";
 
-const ITEMS_PER_PAGE = 7;
+const ITEMS_PER_PAGE = 10;
 
 /** Clean up a raw (non-JSON) email body: drop a leading "Template:" label and a
  *  trailing embedded timestamp like "05-09-2026 13:49" that automation tools
@@ -186,6 +186,7 @@ export default function SentEmailsPage() {
                     board: leadBoard,
                     boardLabel: boardLabel(leadBoard),
                     sentiment: lead.email_sentiment || "",
+                    note: lead.email_note || "",
                     propertyType: lead.property_type || "",
                     propertyCategory: lead.property_category || "",
                     sender: fromAddr || "",
@@ -376,6 +377,9 @@ function SentEmailCard({ email }: { email: any }) {
                                     {email.propertyCategory && (
                                         <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: "rgba(255,159,10,0.12)", color: "var(--orange)", border: "1px solid rgba(255,159,10,0.25)" }}>{email.propertyCategory}</span>
                                     )}
+                                    {email.sentiment && (
+                                        <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, textTransform: "capitalize", background: String(email.sentiment).toLowerCase().includes("positive") ? "rgba(48,209,88,0.12)" : String(email.sentiment).toLowerCase().includes("negative") ? "rgba(255,69,58,0.10)" : "rgba(142,142,147,0.14)", color: String(email.sentiment).toLowerCase().includes("positive") ? "var(--green)" : String(email.sentiment).toLowerCase().includes("negative") ? "var(--red)" : "var(--label-secondary)" }}>{email.sentiment}</span>
+                                    )}
                                     {email.hasReplied && (
                                         <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 7px", borderRadius: "var(--radius-xs)", fontSize: 10, fontWeight: 700, background: "rgba(48,209,88,0.12)", color: "var(--green)" }}>
                                             <Reply style={{ width: 10, height: 10 }} /> Replied
@@ -409,6 +413,11 @@ function SentEmailCard({ email }: { email: any }) {
                         {email.sender && <p style={{ fontSize: 11, color: "var(--label-tertiary)" }}><span style={{ fontWeight: 600, color: "var(--label-secondary)" }}>From:</span> {email.sender}</p>}
                         {email.recipient && email.recipient !== email.sender && <p style={{ fontSize: 11, color: "var(--label-tertiary)" }}><span style={{ fontWeight: 600, color: "var(--label-secondary)" }}>To:</span> {email.recipient}</p>}
                         {email.provider && <p style={{ fontSize: 11, color: "var(--label-tertiary)" }}><span style={{ fontWeight: 600, color: "var(--label-secondary)" }}>Provider:</span> {email.provider}</p>}
+                        {email.note && (
+                            <div style={{ fontSize: 12, color: "var(--label-secondary)", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-sm)", padding: "8px 10px", lineHeight: 1.5 }}>
+                                <span style={{ fontWeight: 700, color: "var(--label-primary)" }}>AI Note: </span>{email.note}
+                            </div>
+                        )}
                         {isHtmlDoc ? (
                             <>
                                 <EmailHtmlPreview html={email.content} onOpen={() => setHtmlModalOpen(true)} />

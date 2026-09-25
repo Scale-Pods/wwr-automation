@@ -13,6 +13,9 @@ type SharedCall = {
     summary: string;
     recordingUrl: string | null;
     transcript: CallTurn[];
+    callSlot?: number;
+    sentiment?: string | null;
+    note?: string | null;
 };
 
 type SharedData = { name: string; phone: string | null; calls: SharedCall[] };
@@ -40,13 +43,22 @@ function CallCard({ call, open, onToggle }: { call: SharedCall; open: boolean; o
                     <Phone style={{ width: 15, height: 15 }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", margin: 0 }}>{formatDate(call.startedAt)}</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", margin: 0 }}>
+                        {call.callSlot ? `Call ${call.callSlot} · ` : ""}{formatDate(call.startedAt)}
+                    </p>
                     <p style={{ fontSize: 11, color: "#64748b", margin: "2px 0 0", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><Clock style={{ width: 10, height: 10 }} />{formatDuration(call.durationSeconds)}</span>
                         <span style={{ width: 3, height: 3, borderRadius: "50%", background: "#cbd5e1" }} />
                         <span>{call.transcript.length} turns</span>
                     </p>
                 </div>
+                {call.sentiment && (
+                    <span style={{
+                        flexShrink: 0, display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 20, fontSize: 10, fontWeight: 700, textTransform: "capitalize",
+                        background: call.sentiment.toLowerCase().includes("positive") ? "rgba(34,197,94,0.12)" : call.sentiment.toLowerCase().includes("negative") ? "rgba(239,68,68,0.10)" : "rgba(148,163,184,0.14)",
+                        color: call.sentiment.toLowerCase().includes("positive") ? "#16a34a" : call.sentiment.toLowerCase().includes("negative") ? "#dc2626" : "#64748b",
+                    }}>{call.sentiment}</span>
+                )}
                 <ChevronDown style={{ width: 16, height: 16, color: "#94a3b8", flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 150ms" }} />
             </button>
 
@@ -58,6 +70,15 @@ function CallCard({ call, open, onToggle }: { call: SharedCall; open: boolean; o
                                 <Sparkles style={{ width: 11, height: 11 }} /> Summary
                             </p>
                             <p style={{ fontSize: 12.5, lineHeight: 1.55, color: "#334155", margin: 0, whiteSpace: "pre-wrap" }}>{call.summary}</p>
+                        </div>
+                    )}
+
+                    {call.note && (
+                        <div style={{ padding: "12px 14px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", margin: "0 0 4px" }}>
+                                AI Note
+                            </p>
+                            <p style={{ fontSize: 12.5, lineHeight: 1.55, color: "#334155", margin: 0, whiteSpace: "pre-wrap" }}>{call.note}</p>
                         </div>
                     )}
 

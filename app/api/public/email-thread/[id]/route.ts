@@ -30,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         'Cache-Control': 'no-store',
     };
 
-    const cols = 'lead_id,crm_id,full_name,first_name,last_name,email,email_conversation,email_reply_track,email_sentiment,property_type,property_category';
+    const cols = 'lead_id,crm_id,full_name,first_name,last_name,email,email_conversation,email_reply_track,email_sentiment,email_note,property_type,property_category';
     const selectQ = encodeURIComponent(cols);
     const base = `${supabaseUrl}/rest/v1/${OUTREACH_TABLE}`;
     const isEmail = rawId.includes('@');
@@ -84,6 +84,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             email_conversation: row.email_conversation ?? [],
             email_reply_track: row.email_reply_track ?? null,
             email_sentiment: row.email_sentiment ?? null,
+            email_note: row.email_note ?? null,
             property_type: row.property_type ?? null,
             property_category: row.property_category ?? null,
         }, { headers: { 'Cache-Control': 'no-store' } });

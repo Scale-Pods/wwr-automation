@@ -169,6 +169,18 @@ export function isReplyTrackPositive(v: any): boolean {
     return s !== '' && s !== 'no' && s !== 'none' && s !== 'false';
 }
 
+/** email_reply_track is a generic "this lead replied" flag shared across
+ *  channels — WhatsApp automations set it too — so it alone isn't proof of an
+ *  actual email reply. A real email reply requires the track flag AND a real
+ *  email address AND a non-empty parsed email_conversation thread. Use this
+ *  wherever "email replies" is counted or filtered, not isReplyTrackPositive
+ *  on email_reply_track alone. */
+export function hasEmailReply(lead: any): boolean {
+    if (!isReplyTrackPositive(lead?.email_reply_track)) return false;
+    if (!lead?.email || !String(lead.email).trim()) return false;
+    return parseJsonArray(lead?.email_conversation).length > 0;
+}
+
 export function parseJsonArray(raw: any): any[] {
     if (!raw) return [];
     if (Array.isArray(raw)) return raw;
