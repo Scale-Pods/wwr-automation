@@ -14,7 +14,7 @@ env/
 **/venv/share/
 **/env/bin/
 **/env/share/
-
+supabase_concurrency.sql
 # Build and Output
 dist/
 build/

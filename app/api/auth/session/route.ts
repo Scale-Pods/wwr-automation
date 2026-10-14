@@ -13,8 +13,8 @@ export async function GET() {
             return NextResponse.json({ authenticated: false }, { status: 401 });
         }
 
-        await jwtVerify(token, secret);
-        return NextResponse.json({ authenticated: true });
+        const { payload } = await jwtVerify(token, secret);
+        return NextResponse.json({ authenticated: true, email: payload.email ?? null });
     } catch (error) {
         return NextResponse.json({ authenticated: false }, { status: 401 });
     }

@@ -14,7 +14,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DataProvider, useData } from "@/context/DataContext";
 import { MaqsamBalanceDetail } from "@/components/dashboard/maqsam-balance-detail";
 import { InsightsAssistant } from "@/components/insights/InsightsAssistant";
+import { OutreachSequenceModal } from "@/components/dashboard/outreach-sequence-modal";
 import { logout } from "@/app/actions/auth";
+
+const OUTREACH_SETTINGS_ALLOWED_EMAIL = "info@scalepods.co";
 
 const dashboardConfig: Record<string, { label: string; color: string; icon: any; items: { title: string; href: string; icon: any }[] }> = {
     master: {
@@ -84,6 +87,17 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         isOpen: false, type: 'vapi',
     });
     const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [outreachModalOpen, setOutreachModalOpen] = useState(false);
+
+    useEffect(() => {
+        fetch('/api/auth/session')
+            .then((res) => res.json())
+            .then((data) => setUserEmail(data.email ?? null))
+            .catch(() => setUserEmail(null));
+    }, []);
+
+    const canManageOutreachSettings = userEmail === OUTREACH_SETTINGS_ALLOWED_EMAIL;
 
     // On desktop, hover drives the expand/collapse rail. On <1024px the sidebar
     // is a drawer instead — it's always "expanded" while open, and hover is moot.
@@ -382,6 +396,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                                     <span style={{ color: chip.color }}>{chip.icon}</span>
                                 </button>
                             ))}
+                            {canManageOutreachSettings && (
+                                <button
+                                    onClick={() => setOutreachModalOpen(true)}
+                                    className="wallet-chip"
+                                    title="Outreach Sequence Settings"
+                                >
+                                    <span style={{ color: 'var(--label-secondary)' }}><Settings size={13} /></span>
+                                </button>
+                            )}
                         </div>
                     )}
                     <button
@@ -425,6 +448,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
             {/* Personal Insights AI Assistant — floating, bottom-right */}
             <InsightsAssistant />
+
+            {/* Outreach Sequence Settings Modal — info@scalepods.co only */}
+            {canManageOutreachSettings && (
+                <OutreachSequenceModal
+                    isOpen={outreachModalOpen}
+                    onClose={() => setOutreachModalOpen(false)}
+                />
+            )}
         </div>
     );
 }
