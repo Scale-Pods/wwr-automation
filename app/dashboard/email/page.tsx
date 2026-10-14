@@ -69,7 +69,7 @@ export default function EmailDashboardPage() {
     const [board, setBoard] = useState<EmailBoardKey>("all");
 
     const data = useMemo(() => {
-        const empty = { totalEmails: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, perStep: [0, 0, 0, 0, 0] };
+        const empty = { totalEmails: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, perStep: [0, 0, 0, 0, 0, 0, 0, 0] };
         if (loadingLeads) return empty;
 
         const fromD = dateRange?.from ? new Date(dateRange.from) : null;
@@ -79,7 +79,7 @@ export default function EmailDashboardPage() {
         const inRange = (d: Date | null) => { if (!fromD || !toD) return true; if (!d) return false; return d >= fromD && d <= toD; };
 
         let totalEmails = 0, replyCount = 0, posSentiment = 0, negSentiment = 0;
-        const perStep = [0, 0, 0, 0, 0];
+        const perStep = [0, 0, 0, 0, 0, 0, 0, 0];
 
         (allLeads as OutreachLead[]).forEach(lead => {
             if (!matchesBoard(lead, board)) return;
@@ -89,7 +89,7 @@ export default function EmailDashboardPage() {
                 const ts = coerceTimestamp(s.sent_at) || coerceTimestamp(s.obj?.timestamp) || lead.created_at;
                 if (inRange(ts ? new Date(ts) : null)) {
                     totalEmails++;
-                    if (s.n >= 1 && s.n <= 5) perStep[s.n - 1]++;
+                    if (s.n >= 1 && s.n <= 8) perStep[s.n - 1]++;
                 }
             });
             if (hasEmailReply(lead)) replyCount++;
@@ -131,7 +131,7 @@ export default function EmailDashboardPage() {
                     <h2 style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.022em", color: "var(--label-primary)" }}>Per-Step Performance</h2>
                 </div>
                 <div className="metric-grid-sm">
-                    {["Email 1", "Email 2", "Email 3", "Email 4", "Email 5"].map((name, i) => (
+                    {["Email 1", "Email 2", "Email 3", "Email 4", "Email 5", "Email 6", "Email 7", "Email 8"].map((name, i) => (
                         <BreakdownCard key={name} title={name} count={data.perStep[i]} total={data.totalEmails} accentColor="var(--blue)" />
                     ))}
                 </div>

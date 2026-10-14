@@ -138,17 +138,28 @@ export const OUTREACH_LIST_COLUMNS = [
     'wa_2', 'wa_2_status', 'wa_2_sent_at',
     'wa_3', 'wa_3_status', 'wa_3_sent_at',
     'wa_4', 'wa_4_status', 'wa_4_sent_at',
+    'wa_5', 'wa_5_status', 'wa_5_sent_at',
+    'wa_6', 'wa_6_status', 'wa_6_sent_at',
+    'wa_7', 'wa_7_status', 'wa_7_sent_at',
+    'wa_8', 'wa_8_status', 'wa_8_sent_at',
     'wa_sentiment', 'wa_note', 'last_whatsapp_message', 'whatsapp_conversation', 'whatsapp_reply_track',
     'email_1', 'email_1_status', 'email_1_sent_at',
     'email_2', 'email_2_status', 'email_2_sent_at',
     'email_3', 'email_3_status', 'email_3_sent_at',
     'email_4', 'email_4_status', 'email_4_sent_at',
     'email_5', 'email_5_status', 'email_5_sent_at',
+    'email_6', 'email_6_status', 'email_6_sent_at',
+    'email_7', 'email_7_status', 'email_7_sent_at',
+    'email_8', 'email_8_status', 'email_8_sent_at',
     'email_sentiment', 'email_note', 'email_conversation', 'email_reply_track',
     'call_1_date', 'call_1_status', 'call_1_sentiment', 'call_1_note', 'call_recording_1',
     'call_2_date', 'call_2_status', 'call_2_sentiment', 'call_2_note', 'call_recording_2',
     'call_3_date', 'call_3_status', 'call_3_sentiment', 'call_3_note', 'call_recording_3',
     'call_4_date', 'call_4_status', 'call_4_sentiment', 'call_4_note', 'call_recording_4',
+    'call_5_date', 'call_5_status', 'call_5_sentiment', 'call_5_note', 'call_recording_5',
+    'call_6_date', 'call_6_status', 'call_6_sentiment', 'call_6_note', 'call_recording_6',
+    'call_7_date', 'call_7_status', 'call_7_sentiment', 'call_7_note', 'call_recording_7',
+    'call_8_date', 'call_8_status', 'call_8_sentiment', 'call_8_note', 'call_recording_8',
     'call_reply_track', 'call_route',
     'replied', 'last_activity', 'created_time', 'created_at', 'updated_at',
 ].join(',');
@@ -224,18 +235,18 @@ export function isInboundMessage(m: any): boolean {
 export function waMessagesSent(row: any): number {
     const outbound = parseJsonArray(row?.whatsapp_conversation).filter(isOutboundMessage).length;
     let slots = 0;
-    for (let n = 1; n <= 4; n++) if (row?.[`wa_${n}`]) slots++;
+    for (let n = 1; n <= 8; n++) if (row?.[`wa_${n}`]) slots++;
     return Math.max(outbound, slots);
 }
 
 /**
- * The wa_1..wa_3 slots that are a genuine outbound send: wa_N is not null AND
+ * The wa_1..wa_8 slots that are a genuine outbound send: wa_N is not null AND
  * wa_N_status is "sent". Returns the slot metadata (with its sent_at) so callers
  * can date-scope on wa_N_sent_at.
  */
 export function waSentSlots(row: any): { n: number; message: string; status: string; sent_at: string | null }[] {
     const out: { n: number; message: string; status: string; sent_at: string | null }[] = [];
-    for (let n = 1; n <= 3; n++) {
+    for (let n = 1; n <= 8; n++) {
         const message = row?.[`wa_${n}`];
         const status = String(row?.[`wa_${n}_status`] ?? '').trim().toLowerCase();
         if (message != null && String(message).trim() !== '' && status === 'sent') {
@@ -245,7 +256,7 @@ export function waSentSlots(row: any): { n: number; message: string; status: str
     return out;
 }
 
-/** True when a lead has at least one wa_1..wa_3 slot that was actually sent. */
+/** True when a lead has at least one wa_1..wa_8 slot that was actually sent. */
 export function hasWaSend(row: any): boolean {
     return waSentSlots(row).length > 0;
 }

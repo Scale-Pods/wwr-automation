@@ -90,11 +90,11 @@ export async function GET(req: Request) {
         const dailyMap: Record<string, number> = {};
 
         rows.forEach(r => {
-            const hasWa = !!(r.wa_1 || r.wa_2 || r.wa_3 || r.wa_4);
+            const hasWa = !!(r.wa_1 || r.wa_2 || r.wa_3 || r.wa_4 || r.wa_5 || r.wa_6 || r.wa_7 || r.wa_8);
             if (hasWa) totalWaReachouts++;
             if (isReplyTrackPositive(r.whatsapp_reply_track)) totalWaReplies++;
 
-            for (let n = 1; n <= 5; n++) if (r[`email_${n}`]) totalEmailsSent++;
+            for (let n = 1; n <= 8; n++) if (r[`email_${n}`]) totalEmailsSent++;
             if (hasEmailReply(r)) totalEmailReplies++;
 
             const dt = r.created_at;

@@ -49,7 +49,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
     try {
         // 1. Resolve the lead.
-        const leadCols = enc('lead_id,crm_id,full_name,first_name,last_name,phone,call_1_sentiment,call_1_note,call_2_sentiment,call_2_note,call_3_sentiment,call_3_note');
+        const leadCols = enc('lead_id,crm_id,full_name,first_name,last_name,phone,call_1_sentiment,call_1_note,call_2_sentiment,call_2_note,call_3_sentiment,call_3_note,call_4_sentiment,call_4_note,call_5_sentiment,call_5_note,call_6_sentiment,call_6_note,call_7_sentiment,call_7_note,call_8_sentiment,call_8_note');
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
         let leads = await tryFetch(`${base}/${OUTREACH_TABLE}?select=${leadCols}&crm_id=eq.${enc(rawId)}&limit=5`);
         if (!leads.length && isUuid) {
@@ -82,19 +82,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
         }
 
-        // call_1/2/3_sentiment+note on the lead row are assigned in chronological
-        // order (n8n fills the first empty slot 1→3 as calls happen), so the
+        // call_1..8_sentiment+note on the lead row are assigned in chronological
+        // order (n8n fills the first empty slot 1→8 as calls happen), so the
         // oldest call maps to slot 1, next to slot 2, etc.
         const slotFields = [
             { sentiment: lead.call_1_sentiment || null, note: lead.call_1_note || null },
             { sentiment: lead.call_2_sentiment || null, note: lead.call_2_note || null },
             { sentiment: lead.call_3_sentiment || null, note: lead.call_3_note || null },
+            { sentiment: lead.call_4_sentiment || null, note: lead.call_4_note || null },
+            { sentiment: lead.call_5_sentiment || null, note: lead.call_5_note || null },
+            { sentiment: lead.call_6_sentiment || null, note: lead.call_6_note || null },
+            { sentiment: lead.call_7_sentiment || null, note: lead.call_7_note || null },
+            { sentiment: lead.call_8_sentiment || null, note: lead.call_8_note || null },
         ];
 
-        // Slot numbers (1/2/3) must be assigned across ALL attempts in chronological
-        // order BEFORE dropping empty ones — a no-transcript call 2 still consumes
-        // slot 2 in Supabase, so filtering first would shift call 3's sentiment/note
-        // onto what displays as "call 2".
+        // Slot numbers (1-8) must be assigned across ALL attempts in chronological
+        // order BEFORE dropping empty ones — a no-transcript call still consumes
+        // its slot in Supabase, so filtering first would shift a later call's
+        // sentiment/note onto the wrong displayed slot.
         const calls = Array.from(byId.values())
             .map(c => {
                 const turns = visibleTurns(parseCallTranscript(c));

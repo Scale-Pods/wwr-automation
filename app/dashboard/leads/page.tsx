@@ -29,16 +29,27 @@ const JOURNEY_STEPS: { key: string; label: string; test: (l: OutreachLead) => bo
     { key: "wa2", label: "WhatsApp 2", test: l => !!l.wa_slots.find(s => s.n === 2 && (s.message || s.sent_at)) },
     { key: "wa3", label: "WhatsApp 3", test: l => !!l.wa_slots.find(s => s.n === 3 && (s.message || s.sent_at)) },
     { key: "wa4", label: "WhatsApp 4", test: l => !!l.wa_slots.find(s => s.n === 4 && (s.message || s.sent_at)) },
+    { key: "wa5", label: "WhatsApp 5", test: l => !!l.wa_slots.find(s => s.n === 5 && (s.message || s.sent_at)) },
+    { key: "wa6", label: "WhatsApp 6", test: l => !!l.wa_slots.find(s => s.n === 6 && (s.message || s.sent_at)) },
+    { key: "wa7", label: "WhatsApp 7", test: l => !!l.wa_slots.find(s => s.n === 7 && (s.message || s.sent_at)) },
+    { key: "wa8", label: "WhatsApp 8", test: l => !!l.wa_slots.find(s => s.n === 8 && (s.message || s.sent_at)) },
     // email_slots only contains slots where email_N itself has content (see buildEmailSlots).
     { key: "em1", label: "Email 1", test: l => !!l.email_slots.find(s => s.n === 1) },
     { key: "em2", label: "Email 2", test: l => !!l.email_slots.find(s => s.n === 2) },
     { key: "em3", label: "Email 3", test: l => !!l.email_slots.find(s => s.n === 3) },
     { key: "em4", label: "Email 4", test: l => !!l.email_slots.find(s => s.n === 4) },
     { key: "em5", label: "Email 5", test: l => !!l.email_slots.find(s => s.n === 5) },
+    { key: "em6", label: "Email 6", test: l => !!l.email_slots.find(s => s.n === 6) },
+    { key: "em7", label: "Email 7", test: l => !!l.email_slots.find(s => s.n === 7) },
+    { key: "em8", label: "Email 8", test: l => !!l.email_slots.find(s => s.n === 8) },
     { key: "c1", label: "Call 1", test: l => !!l.call_slots.find(s => s.n === 1 && (s.date || s.status)) },
     { key: "c2", label: "Call 2", test: l => !!l.call_slots.find(s => s.n === 2 && (s.date || s.status)) },
     { key: "c3", label: "Call 3", test: l => !!l.call_slots.find(s => s.n === 3 && (s.date || s.status)) },
     { key: "c4", label: "Call 4", test: l => !!l.call_slots.find(s => s.n === 4 && (s.date || s.status)) },
+    { key: "c5", label: "Call 5", test: l => !!l.call_slots.find(s => s.n === 5 && (s.date || s.status)) },
+    { key: "c6", label: "Call 6", test: l => !!l.call_slots.find(s => s.n === 6 && (s.date || s.status)) },
+    { key: "c7", label: "Call 7", test: l => !!l.call_slots.find(s => s.n === 7 && (s.date || s.status)) },
+    { key: "c8", label: "Call 8", test: l => !!l.call_slots.find(s => s.n === 8 && (s.date || s.status)) },
 ];
 
 function ProgressBreakdown({ lead }: { lead: OutreachLead }) {

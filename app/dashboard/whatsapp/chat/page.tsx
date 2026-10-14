@@ -16,7 +16,7 @@ import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage
 function waSignals(lead: any) {
     const conv = parseJsonArray(lead.whatsapp_conversation);
     const slotMsgs: { n: number; message: string | null; status: string | null; sent_at: string | null }[] = [];
-    for (let n = 1; n <= 4; n++) {
+    for (let n = 1; n <= 8; n++) {
         const message = lead[`wa_${n}`] ?? null;
         const status = lead[`wa_${n}_status`] ?? null;
         const sent_at = lead[`wa_${n}_sent_at`] ?? null;

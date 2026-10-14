@@ -142,9 +142,9 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                 timeline.forEach((m, i) => { m.sequence = i + 1; });
             }
 
-            // Fallback: build from wa_1..wa_4 columns
+            // Fallback: build from wa_1..wa_8 columns
             if (timeline.length === 0) {
-                for (let n = 1; n <= 4; n++) {
+                for (let n = 1; n <= 8; n++) {
                     const raw = found[`wa_${n}`];
                     if (!raw || !String(raw).trim()) continue;
                     timeline.push({

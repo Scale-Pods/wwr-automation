@@ -44,7 +44,7 @@ export default function WhatsappSentPage() {
 
         leads.forEach(lead => {
             const name = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.phone || "Unknown";
-            for (let n = 1; n <= 4; n++) {
+            for (let n = 1; n <= 8; n++) {
                 const message = lead[`wa_${n}`];
                 const status = lead[`wa_${n}_status`];
                 const sentAtRaw = lead[`wa_${n}_sent_at`];

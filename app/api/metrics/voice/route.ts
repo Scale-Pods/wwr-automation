@@ -126,7 +126,7 @@ export async function GET(req: Request) {
                 headers
             ),
             fetchAllPages(
-                `${supabaseUrl}/rest/v1/outreach_table?select=lead_id,crm_id,phone,call_1_sentiment,call_2_sentiment,call_3_sentiment,call_4_sentiment`,
+                `${supabaseUrl}/rest/v1/outreach_table?select=lead_id,crm_id,phone,call_1_sentiment,call_2_sentiment,call_3_sentiment,call_4_sentiment,call_5_sentiment,call_6_sentiment,call_7_sentiment,call_8_sentiment`,
                 headers
             ).catch(() => [] as any[]),
         ]);
@@ -134,7 +134,7 @@ export async function GET(req: Request) {
         // Sentiment lives on outreach_table's call_1..4_sentiment slots, not on
         // vapi_call_logs itself, and slot values look like "Positive | Status:
         // Viewing Scheduled" — every call belonging to a lead shares that
-        // lead's overall sentiment: positive if ANY of call_1/2/3/4_sentiment
+        // lead's overall sentiment: positive if ANY of call_1..8_sentiment
         // contains "positive" (case-insensitive). lead_id on vapi_call_logs
         // doesn't always match outreach_table's lead_id/crm_id, so fall back to
         // matching by phone number, same as /api/calls does.
@@ -154,7 +154,10 @@ export async function GET(req: Request) {
                 if (cp.length >= 6) lead = leadByPhone.get(cp);
             }
             if (!lead) continue;
-            const slots = [lead.call_1_sentiment, lead.call_2_sentiment, lead.call_3_sentiment, lead.call_4_sentiment];
+            const slots = [
+                lead.call_1_sentiment, lead.call_2_sentiment, lead.call_3_sentiment, lead.call_4_sentiment,
+                lead.call_5_sentiment, lead.call_6_sentiment, lead.call_7_sentiment, lead.call_8_sentiment,
+            ];
             const positiveSlot = slots.find(s => String(s || '').toLowerCase().includes('positive'));
             sentimentById.set(r.id, positiveSlot || slots.find(Boolean) || null);
         }

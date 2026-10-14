@@ -36,7 +36,7 @@ function num(v: any): number | null {
 
 function buildWaSlots(r: any): WaSlot[] {
     const slots: WaSlot[] = [];
-    for (let n = 1; n <= 4; n++) {
+    for (let n = 1; n <= 8; n++) {
         const message = r[`wa_${n}`] ?? null;
         const status = r[`wa_${n}_status`] ?? null;
         const sent_at = r[`wa_${n}_sent_at`] ?? null;
@@ -47,7 +47,7 @@ function buildWaSlots(r: any): WaSlot[] {
 
 function buildEmailSlots(r: any): EmailSlot[] {
     const slots: EmailSlot[] = [];
-    for (let n = 1; n <= 5; n++) {
+    for (let n = 1; n <= 8; n++) {
         const raw = r[`email_${n}`];
         // email_N itself must have content — a _status/_sent_at with no body is not
         // a sent email (e.g. a scheduled-but-not-yet-sent row, or stale metadata).
@@ -65,7 +65,7 @@ function buildEmailSlots(r: any): EmailSlot[] {
 
 function buildCallSlots(r: any): CallSlot[] {
     const slots: CallSlot[] = [];
-    for (let n = 1; n <= 4; n++) {
+    for (let n = 1; n <= 8; n++) {
         const date = r[`call_${n}_date`] ?? null;
         const status = r[`call_${n}_status`] ?? null;
         const sentiment = r[`call_${n}_sentiment`] ?? null;

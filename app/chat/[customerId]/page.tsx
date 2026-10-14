@@ -44,9 +44,9 @@ function buildTimeline(lead: any): ChatMsg[] {
         return timeline;
     }
 
-    // Fallback: build from wa_1..wa_4 columns.
+    // Fallback: build from wa_1..wa_8 columns.
     const raw = lead?.raw ?? lead;
-    for (let n = 1; n <= 4; n++) {
+    for (let n = 1; n <= 8; n++) {
         const text = raw?.[`wa_${n}`];
         if (!text || !String(text).trim()) continue;
         timeline.push({ type: "bot", content: String(text).trim(), label: `WhatsApp ${n}`, date: coerceTimestamp(raw?.[`wa_${n}_sent_at`]) });

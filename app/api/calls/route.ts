@@ -14,7 +14,7 @@ async function loadLeadIndex(): Promise<{ byLeadId: Map<string, any>; byPhone: M
     const byPhone = new Map<string, any>();
     if (!SUPA_URL || !SUPA_KEY) return { byLeadId, byPhone };
     try {
-        const cols = 'lead_id,crm_id,full_name,first_name,last_name,phone,email,lead_status,lead_stage,call_1_sentiment,call_1_note,call_2_sentiment,call_2_note,call_3_sentiment,call_3_note,call_4_sentiment,call_4_note';
+        const cols = 'lead_id,crm_id,full_name,first_name,last_name,phone,email,lead_status,lead_stage,call_1_sentiment,call_1_note,call_2_sentiment,call_2_note,call_3_sentiment,call_3_note,call_4_sentiment,call_4_note,call_5_sentiment,call_5_note,call_6_sentiment,call_6_note,call_7_sentiment,call_7_note,call_8_sentiment,call_8_note';
         const rows: any[] = [];
         let offset = 0;
         while (true) {
@@ -78,7 +78,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
         let lead = d.lead_id ? byLeadId.get(String(d.lead_id)) : undefined;
         if (!lead && cleanPh.length >= 6) lead = byPhone.get(cleanPh);
 
-        // Sentiment/note live on outreach_table's call_1..4_sentiment/note
+        // Sentiment/note live on outreach_table's call_1..8_sentiment/note
         // slots, not on vapi_call_logs — and slot values look like "Positive |
         // Status: Viewing Scheduled". Use the SAME resolved `lead` (lead_id
         // primary, phone fallback) as the rest of this row, rather than
@@ -91,6 +91,10 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
                 { sentiment: lead.call_2_sentiment, note: lead.call_2_note },
                 { sentiment: lead.call_3_sentiment, note: lead.call_3_note },
                 { sentiment: lead.call_4_sentiment, note: lead.call_4_note },
+                { sentiment: lead.call_5_sentiment, note: lead.call_5_note },
+                { sentiment: lead.call_6_sentiment, note: lead.call_6_note },
+                { sentiment: lead.call_7_sentiment, note: lead.call_7_note },
+                { sentiment: lead.call_8_sentiment, note: lead.call_8_note },
             ];
             const chosen = slots.find(s => String(s.sentiment || '').toLowerCase().includes('positive'))
                 || slots.find(s => s.sentiment);

@@ -138,10 +138,10 @@ export default function MasterDashboard() {
             if (lead.email_replied) totalEmailReplies++;
 
             // WhatsApp reachouts — a lead counts only when it has a real send:
-            // wa_N is not null AND wa_N_status === "sent", for any of wa_1..wa_3.
+            // wa_N is not null AND wa_N_status === "sent", for any of wa_1..wa_8.
             // Date-scoped on the earliest such wa_N_sent_at (Qatar "DD/MM/YYYY HH:MM").
             const sentSlots = (lead.wa_slots || []).filter(
-                (s: any) => s.n <= 3 && s.message != null && String(s.message).trim() !== '' &&
+                (s: any) => s.n <= 8 && s.message != null && String(s.message).trim() !== '' &&
                     String(s.status ?? '').trim().toLowerCase() === 'sent'
             );
             if (sentSlots.length > 0) {
