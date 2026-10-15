@@ -23,33 +23,43 @@ import { useData } from "@/context/DataContext";
 import type { OutreachLead } from "@/lib/outreach-types";
 
 // ── Progress model: a lead's outreach journey across channels ────────────────
-// 4 WhatsApp touches + 5 emails + 4 calls = 13 possible steps. Progress = done/total.
-const JOURNEY_STEPS: { key: string; label: string; test: (l: OutreachLead) => boolean }[] = [
-    { key: "wa1", label: "WhatsApp 1", test: l => !!l.wa_slots.find(s => s.n === 1 && (s.message || s.sent_at)) },
-    { key: "wa2", label: "WhatsApp 2", test: l => !!l.wa_slots.find(s => s.n === 2 && (s.message || s.sent_at)) },
-    { key: "wa3", label: "WhatsApp 3", test: l => !!l.wa_slots.find(s => s.n === 3 && (s.message || s.sent_at)) },
-    { key: "wa4", label: "WhatsApp 4", test: l => !!l.wa_slots.find(s => s.n === 4 && (s.message || s.sent_at)) },
-    { key: "wa5", label: "WhatsApp 5", test: l => !!l.wa_slots.find(s => s.n === 5 && (s.message || s.sent_at)) },
-    { key: "wa6", label: "WhatsApp 6", test: l => !!l.wa_slots.find(s => s.n === 6 && (s.message || s.sent_at)) },
-    { key: "wa7", label: "WhatsApp 7", test: l => !!l.wa_slots.find(s => s.n === 7 && (s.message || s.sent_at)) },
-    { key: "wa8", label: "WhatsApp 8", test: l => !!l.wa_slots.find(s => s.n === 8 && (s.message || s.sent_at)) },
-    // email_slots only contains slots where email_N itself has content (see buildEmailSlots).
-    { key: "em1", label: "Email 1", test: l => !!l.email_slots.find(s => s.n === 1) },
-    { key: "em2", label: "Email 2", test: l => !!l.email_slots.find(s => s.n === 2) },
-    { key: "em3", label: "Email 3", test: l => !!l.email_slots.find(s => s.n === 3) },
-    { key: "em4", label: "Email 4", test: l => !!l.email_slots.find(s => s.n === 4) },
-    { key: "em5", label: "Email 5", test: l => !!l.email_slots.find(s => s.n === 5) },
-    { key: "em6", label: "Email 6", test: l => !!l.email_slots.find(s => s.n === 6) },
-    { key: "em7", label: "Email 7", test: l => !!l.email_slots.find(s => s.n === 7) },
-    { key: "em8", label: "Email 8", test: l => !!l.email_slots.find(s => s.n === 8) },
-    { key: "c1", label: "Call 1", test: l => !!l.call_slots.find(s => s.n === 1 && (s.date || s.status)) },
-    { key: "c2", label: "Call 2", test: l => !!l.call_slots.find(s => s.n === 2 && (s.date || s.status)) },
-    { key: "c3", label: "Call 3", test: l => !!l.call_slots.find(s => s.n === 3 && (s.date || s.status)) },
-    { key: "c4", label: "Call 4", test: l => !!l.call_slots.find(s => s.n === 4 && (s.date || s.status)) },
-    { key: "c5", label: "Call 5", test: l => !!l.call_slots.find(s => s.n === 5 && (s.date || s.status)) },
-    { key: "c6", label: "Call 6", test: l => !!l.call_slots.find(s => s.n === 6 && (s.date || s.status)) },
-    { key: "c7", label: "Call 7", test: l => !!l.call_slots.find(s => s.n === 7 && (s.date || s.status)) },
-    { key: "c8", label: "Call 8", test: l => !!l.call_slots.find(s => s.n === 8 && (s.date || s.status)) },
+// Real 30-day cadence: WhatsApp day 1/5/11/17/23/29, Email day 2/7/13/19/25,
+// Call day 3/9/15/21/27/30 — 17 steps total. Position within a channel (1st
+// WhatsApp send, 2nd WhatsApp send, ...) maps to wa_N/email_N/call_N in order.
+//
+// A step only counts as done when the slot shows an actual send, not just a
+// scheduled/placeholder date: wa_N_sent_at / email_N_sent_at hold plain future
+// dates for not-yet-sent slots and only get a "- Done" suffix once sent; wa/email
+// status is "sent"/"delivered"/"read" once sent; call_N_status holds free text
+// like "Sent - D1 - Commercial" once the call went out.
+const SENT_STATUS_RE = /sent|deliver|read/i;
+const DONE_SUFFIX_RE = /done/i;
+
+function waOrEmailSlotSent(s: { status: string | null; sent_at: string | null }): boolean {
+    return SENT_STATUS_RE.test(s.status || "") || DONE_SUFFIX_RE.test(s.sent_at || "");
+}
+function callSlotSent(s: { status: string | null }): boolean {
+    return SENT_STATUS_RE.test(s.status || "");
+}
+
+const JOURNEY_STEPS: { key: string; label: string; day: number; test: (l: OutreachLead) => boolean }[] = [
+    { key: "wa1", label: "WhatsApp (Day 1)", day: 1, test: l => !!l.wa_slots.find(s => s.n === 1 && waOrEmailSlotSent(s)) },
+    { key: "em1", label: "Email (Day 2)", day: 2, test: l => !!l.email_slots.find(s => s.n === 1 && waOrEmailSlotSent(s)) },
+    { key: "c1", label: "Voice Call (Day 3)", day: 3, test: l => !!l.call_slots.find(s => s.n === 1 && callSlotSent(s)) },
+    { key: "wa2", label: "WhatsApp (Day 5)", day: 5, test: l => !!l.wa_slots.find(s => s.n === 2 && waOrEmailSlotSent(s)) },
+    { key: "em2", label: "Email (Day 7)", day: 7, test: l => !!l.email_slots.find(s => s.n === 2 && waOrEmailSlotSent(s)) },
+    { key: "c2", label: "Voice Call (Day 9)", day: 9, test: l => !!l.call_slots.find(s => s.n === 2 && callSlotSent(s)) },
+    { key: "wa3", label: "WhatsApp (Day 11)", day: 11, test: l => !!l.wa_slots.find(s => s.n === 3 && waOrEmailSlotSent(s)) },
+    { key: "em3", label: "Email (Day 13)", day: 13, test: l => !!l.email_slots.find(s => s.n === 3 && waOrEmailSlotSent(s)) },
+    { key: "c3", label: "Voice Call (Day 15)", day: 15, test: l => !!l.call_slots.find(s => s.n === 3 && callSlotSent(s)) },
+    { key: "wa4", label: "WhatsApp (Day 17)", day: 17, test: l => !!l.wa_slots.find(s => s.n === 4 && waOrEmailSlotSent(s)) },
+    { key: "em4", label: "Email (Day 19)", day: 19, test: l => !!l.email_slots.find(s => s.n === 4 && waOrEmailSlotSent(s)) },
+    { key: "c4", label: "Voice Call (Day 21)", day: 21, test: l => !!l.call_slots.find(s => s.n === 4 && callSlotSent(s)) },
+    { key: "wa5", label: "WhatsApp (Day 23)", day: 23, test: l => !!l.wa_slots.find(s => s.n === 5 && waOrEmailSlotSent(s)) },
+    { key: "em5", label: "Email (Day 25)", day: 25, test: l => !!l.email_slots.find(s => s.n === 5 && waOrEmailSlotSent(s)) },
+    { key: "c5", label: "Voice Call (Day 27)", day: 27, test: l => !!l.call_slots.find(s => s.n === 5 && callSlotSent(s)) },
+    { key: "wa6", label: "WhatsApp (Day 29)", day: 29, test: l => !!l.wa_slots.find(s => s.n === 6 && waOrEmailSlotSent(s)) },
+    { key: "c6", label: "Voice Call (Day 30)", day: 30, test: l => !!l.call_slots.find(s => s.n === 6 && callSlotSent(s)) },
 ];
 
 function ProgressBreakdown({ lead }: { lead: OutreachLead }) {

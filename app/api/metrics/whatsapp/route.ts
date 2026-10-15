@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { OUTREACH_TABLE, isReplyTrackPositive, coerceTimestamp, waMessagesSent } from '@/lib/outreach-types';
+import { OUTREACH_TABLE, isReplyTrackPositive, waMessagesSent, earliestWaSentDate, hasWaSend } from '@/lib/outreach-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,10 +62,15 @@ export async function GET(req: Request) {
     const cols = '*';
 
     try {
-        // wa_1_sent_at is free-text "DD/MM/YYYY HH:MM" — fetch every lead with a
-        // first WhatsApp message and range-filter on that timestamp in JS.
+        // wa_N_sent_at is free-text "DD/MM/YYYY HH:MM" (or "YYYY-MM-DD HH:MM - Done").
+        // Fetch every lead with any WhatsApp send (wa_1..wa_8, not just wa_1 — a
+        // lead's first send can live in a later slot) and range-filter on the
+        // earliest sent timestamp in JS.
+        const orFilter = encodeURIComponent(
+            Array.from({ length: 8 }, (_, i) => `wa_${i + 1}.not.is.null`).join(',')
+        );
         const rows = await fetchAllPages(
-            `${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${cols}&wa_1=not.is.null&order=created_at.desc`,
+            `${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${cols}&or=(${orFilter})&order=created_at.desc`,
             headers
         );
 
@@ -73,7 +78,8 @@ export async function GET(req: Request) {
         const dailyMap: Record<string, { reachouts: number; replies: number }> = {};
 
         rows.forEach(r => {
-            const dateRef = coerceTimestamp(r.wa_1_sent_at) || coerceTimestamp(r.last_activity) || r.created_at || null;
+            if (!hasWaSend(r)) return;
+            const dateRef = earliestWaSentDate(r);
             const t = dateRef ? new Date(dateRef).getTime() : null;
             if (t == null || t < fromMs || t > toMs) return;
 

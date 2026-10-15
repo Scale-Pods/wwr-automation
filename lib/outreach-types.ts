@@ -261,6 +261,22 @@ export function hasWaSend(row: any): boolean {
     return waSentSlots(row).length > 0;
 }
 
+/**
+ * The earliest wa_N_sent_at among actually-sent wa_1..wa_8 slots, as an ISO
+ * string. Scans every sent slot (not just wa_1), so a lead whose first send
+ * lives in wa_2+ still dates correctly. Falls back to last_activity/created_at
+ * only when no slot has a parseable sent_at.
+ */
+export function earliestWaSentDate(row: any): string | null {
+    const times = waSentSlots(row)
+        .map(s => coerceTimestamp(s.sent_at))
+        .filter((iso): iso is string => Boolean(iso))
+        .map(iso => new Date(iso).getTime())
+        .filter(ms => !isNaN(ms));
+    if (times.length > 0) return new Date(Math.min(...times)).toISOString();
+    return coerceTimestamp(row?.last_activity) || row?.created_at || null;
+}
+
 export function parseJsonObject(raw: any): Record<string, any> | null {
     if (!raw) return null;
     let parsed = raw;
@@ -295,7 +311,7 @@ export function parseQatarDateTime(v: any): string | null {
  *  "DD/MM/YYYY HH:MM" pipeline string. Returns an ISO string or null. */
 export function coerceTimestamp(v: any): string | null {
     if (!v) return null;
-    const s = String(v).trim();
+    let s = String(v).trim();
     if (!s) return null;
     // "SENT | 2026-06-29T18:24:50.000Z"
     if (s.includes('|')) {
@@ -306,10 +322,21 @@ export function coerceTimestamp(v: any): string | null {
             if (!isNaN(new Date(part).getTime())) return part;
         }
     }
+    // "2026-10-14 20:23 - Done" / "08/09/2026 17:22 - Failed" — the wa_N/email_N
+    // _sent_at columns append a trailing " - <status>" that breaks Date parsing.
+    s = s.replace(/\s*-\s*(Done|Sent|Failed|Pending|Skipped|Error)\s*$/i, '').trim();
     // "08/09/2026 17:22" / "08/09/2026, 17:12:08" — try this BEFORE Date() so
     // it isn't mis-parsed as MM/DD.
     const q = parseQatarDateTime(s);
     if (q) return q;
+    // "2026-10-14 20:23" (ISO-ish date but space instead of 'T') — treat as
+    // Asia/Qatar local time like the rest of the pipeline's timestamps.
+    const isoSpace = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?\s*$/);
+    if (isoSpace) {
+        const [, yyyy, mm, dd, hh, min, ss] = isoSpace;
+        const iso = `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss ?? '00'}+03:00`;
+        if (!isNaN(new Date(iso).getTime())) return iso;
+    }
     if (!isNaN(new Date(s).getTime())) return s;
     return null;
 }

@@ -11,13 +11,13 @@ import {
 } from "@/components/ui/tooltip";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent } from "@/lib/outreach-types";
+import { isReplyTrackPositive, parseJsonArray, isInboundMessage, waMessagesSent, earliestWaSentDate } from "@/lib/outreach-types";
 
 function waActivity(lead: any) {
     const conv = parseJsonArray(lead.whatsapp_conversation);
     const sent = waMessagesSent(lead);
     const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
-    const lastDate = coerceTimestamp(lead.wa_1_sent_at) || lead.last_activity || lead.created_at || null;
+    const lastDate = earliestWaSentDate(lead);
     return { sent, replied, lastDate };
 }
 

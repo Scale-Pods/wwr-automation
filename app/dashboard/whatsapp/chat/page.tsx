@@ -10,7 +10,7 @@ import { Search, Filter, Users, Send, MessageSquare, RefreshCw, ChevronLeft, Che
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays, startOfDay, endOfDay } from "date-fns";
-import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead } from "@/lib/outreach-types";
+import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, earliestWaSentDate } from "@/lib/outreach-types";
 
 // ── one lead's WhatsApp signals from outreach_table ──────────────────────────
 function waSignals(lead: any) {
@@ -27,7 +27,7 @@ function waSignals(lead: any) {
     const botCount = waMessagesSent(lead);
     const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
     const failedCount = slotMsgs.filter(s => String(s.status || "").toLowerCase().includes("fail")).length;
-    const lastDate = coerceTimestamp(lead.wa_1_sent_at) || lead.last_activity || lead.created_at || null;
+    const lastDate = earliestWaSentDate(lead);
     const msgCount = conv.length || slotMsgs.length;
     return { conv, slotMsgs, botCount, replied, failedCount, lastDate, msgCount };
 }

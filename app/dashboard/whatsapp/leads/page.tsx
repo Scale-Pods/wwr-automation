@@ -27,7 +27,7 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { WhatsAppChatDetail } from "@/components/dashboard/whatsapp-chat-detail";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { isReplyTrackPositive, coerceTimestamp, isPropertyFinderLead } from "@/lib/outreach-types";
+import { isReplyTrackPositive, isPropertyFinderLead, earliestWaSentDate } from "@/lib/outreach-types";
 
 interface UnifiedLead {
     id: string;
@@ -41,7 +41,7 @@ interface UnifiedLead {
 }
 
 function getLeadDate(lead: any): Date | null {
-    const ref = coerceTimestamp(lead.wa_1_sent_at) || lead.last_activity || lead.created_at;
+    const ref = earliestWaSentDate(lead);
     if (ref) { const d = new Date(ref); if (!isNaN(d.getTime())) return d; }
     return null;
 }

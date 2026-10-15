@@ -40,10 +40,28 @@ function parseQatarTimestamp(raw: any): string | null {
 
 function coerceISO(v: any): string | null {
     if (!v) return null;
-    const s = String(v).trim();
+    let s = String(v).trim();
+    if (!s) return null;
     if (s.includes("|")) {
         const part = s.split("|").pop()?.trim();
-        if (part && !isNaN(new Date(part).getTime())) return part;
+        if (part) {
+            const q = parseQatarTimestamp(part);
+            if (q) return q;
+            if (!isNaN(new Date(part).getTime())) return part;
+        }
+    }
+    // "2026-10-14 20:23 - Done" / "08/09/2026 17:22 - Failed" — the wa_N/email_N
+    // _sent_at columns append a trailing " - <status>" that breaks Date parsing.
+    s = s.replace(/\s*-\s*(Done|Sent|Failed|Pending|Skipped|Error)\s*$/i, "").trim();
+    const q = parseQatarTimestamp(s);
+    if (q) return q;
+    // "2026-10-14 20:23" (ISO-ish date but space instead of 'T') — treat as
+    // Asia/Qatar local time like the rest of the pipeline's timestamps.
+    const isoSpace = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?\s*$/);
+    if (isoSpace) {
+        const [, yyyy, mm, dd, hh, min, ss] = isoSpace;
+        const iso = `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss ?? "00"}+03:00`;
+        if (!isNaN(new Date(iso).getTime())) return iso;
     }
     return !isNaN(new Date(s).getTime()) ? s : null;
 }
