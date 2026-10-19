@@ -8,14 +8,43 @@ const SUPA_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/
 const SUPA_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const SUPA_HEADERS = { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` };
 
+/** The three outbound dialer routes. call_route on outreach_table holds one
+ *  of these lowercase values; display labels are title-cased in the UI. */
+export const CALL_ROUTES = ['commercial', 'business', 'residential'] as const;
+export type CallRoute = typeof CALL_ROUTES[number];
+
+/** Normalise any raw route-ish string (call_route column, or the "- D1 -
+ *  Commercial" suffix the dialer appends to call_N_status) to one of
+ *  CALL_ROUTES, or null if it doesn't match any of them. */
+export function normalizeCallRoute(v: any): CallRoute | null {
+    const s = String(v || '').trim().toLowerCase();
+    if (!s) return null;
+    for (const r of CALL_ROUTES) if (s.includes(r)) return r;
+    return null;
+}
+
+/** A call_N_status value counts as "no-answer/no-connect" when the dialer or
+ *  the Maqsam no-connect poller wrote something other than a real "Sent -"
+ *  outcome into it — e.g. "No Answer - D1 - Commercial", "Busy - D2 -
+ *  Residential", "Failed - D1 - Business". A null/empty status means that
+ *  slot was never dialed at all, so it's excluded, not counted as no-answer. */
+export function isNoAnswerStatus(v: any): boolean {
+    const s = String(v || '').trim();
+    if (!s) return false;
+    return !/^Sent\b/i.test(s);
+}
+
 /** Build lookup maps from outreach_table so calls can resolve a real lead. */
-async function loadLeadIndex(): Promise<{ byLeadId: Map<string, any>; byPhone: Map<string, any> }> {
+async function loadLeadIndex(): Promise<{ byLeadId: Map<string, any>; byPhone: Map<string, any>; rows: any[] }> {
     const byLeadId = new Map<string, any>();
     const byPhone = new Map<string, any>();
-    if (!SUPA_URL || !SUPA_KEY) return { byLeadId, byPhone };
+    const rows: any[] = [];
+    if (!SUPA_URL || !SUPA_KEY) return { byLeadId, byPhone, rows };
     try {
-        const cols = 'lead_id,crm_id,full_name,first_name,last_name,phone,email,lead_status,lead_stage,call_1_sentiment,call_1_note,call_2_sentiment,call_2_note,call_3_sentiment,call_3_note,call_4_sentiment,call_4_note,call_5_sentiment,call_5_note,call_6_sentiment,call_6_note,call_7_sentiment,call_7_note,call_8_sentiment,call_8_note';
-        const rows: any[] = [];
+        const callSlotCols = Array.from({ length: 8 }, (_, i) => i + 1)
+            .flatMap(n => [`call_${n}_date`, `call_${n}_status`, `call_${n}_sentiment`, `call_${n}_note`])
+            .join(',');
+        const cols = `lead_id,crm_id,full_name,first_name,last_name,phone,email,lead_status,lead_stage,call_route,${callSlotCols}`;
         let offset = 0;
         while (true) {
             const res = await fetch(
@@ -40,7 +69,76 @@ async function loadLeadIndex(): Promise<{ byLeadId: Map<string, any>; byPhone: M
     } catch (e) {
         console.error('[calls] lead index error', e);
     }
-    return { byLeadId, byPhone };
+    return { byLeadId, byPhone, rows };
+}
+
+/**
+ * Attempts that never reached Vapi at all (bad number, ring-out, Maqsam
+ * busy/failed) never get a vapi_call_logs row — the dialer and the Maqsam
+ * no-connect poller only ever write the outcome onto outreach_table's
+ * call_N_status/call_N_date. Synthesize a displayable "call" row per such
+ * slot directly from those columns so they show up in the Call Logs panel
+ * instead of silently vanishing.
+ */
+function synthesizeNoAnswerCalls(leadRows: any[], fromDate: Date | null, toDate: Date | null): any[] {
+    const out: any[] = [];
+    for (const l of leadRows) {
+        const name = String(l.full_name || [l.first_name, l.last_name].filter(Boolean).join(' ') || '').trim();
+        const route = normalizeCallRoute(l.call_route);
+        for (let n = 1; n <= 8; n++) {
+            const status = l[`call_${n}_status`];
+            if (!isNoAnswerStatus(status)) continue;
+
+            const dateRaw = l[`call_${n}_date`];
+            if (!dateRaw) continue;
+            const started = new Date(dateRaw);
+            if (isNaN(started.getTime())) continue;
+            if (fromDate && started < fromDate) continue;
+            if (toDate && started > toDate) continue;
+
+            const ph = l.phone || 'Unknown';
+            out.push({
+                id: `noanswer-${l.lead_id || l.crm_id || ph}-${n}`,
+                startedAt: started.toISOString(),
+                durationSeconds: 0,
+                durationMinutes: 0,
+                costValue: 0,
+                cost: '$0.000',
+                agentCost: 0,
+                telephonyCost: 0,
+                phone: ph,
+                dialCode: dialCodeOf(ph),
+                name: name || 'Guest',
+                leadId: l.lead_id || l.crm_id || null,
+                crmId: l.crm_id || null,
+                leadStatus: l.lead_status || null,
+                leadStage: l.lead_stage || null,
+                callSummary: l[`call_${n}_note`] || '',
+                transcript: '',
+                recordingUrl: '',
+                status: 'no-answer',
+                endedReason: status,
+                type: 'Outbound',
+                isInbound: false,
+                country: countryOf(ph),
+                source: 'maqsam',
+                vapiAccount: null,
+                vapiPipeline: null,
+                vapiStage: null,
+                vapiStatus: status,
+                assistantId: null,
+                phoneNumber: 'Unknown',
+                sentiment: l[`call_${n}_sentiment`] || null,
+                note: l[`call_${n}_note`] || null,
+                callRoute: route,
+                callSlot: n,
+                isNoAnswer: true,
+                breakdown: { agent: 0, telephony: 0, total: 0 },
+                raw: { callSlot: n, status, lead_id: l.lead_id },
+            });
+        }
+    }
+    return out;
 }
 
 async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null): Promise<any[]> {
@@ -66,7 +164,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
         dateParam += `&started_at=lte.${end.toISOString()}`;
     }
 
-    const { byLeadId, byPhone } = await loadLeadIndex();
+    const { byLeadId, byPhone, rows: leadRows } = await loadLeadIndex();
 
     const normalizeRow = (d: any) => {
         const dur = d.duration_seconds || 0;
@@ -157,19 +255,23 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
             phoneNumber: 'Unknown',
             sentiment,
             note,
+            callRoute: lead ? normalizeCallRoute(lead.call_route) : null,
+            isNoAnswer: false,
             breakdown: { agent: agentCost, telephony, total: totalCost },
             raw: { id: d.id, startedAt: d.started_at, assistantId: d.assistantId, isInbound, lead_id: d.lead_id },
         };
     };
 
+    const noAnswerCalls = synthesizeNoAnswerCalls(leadRows, fromDate, toDate);
+
     try {
         const url = `${baseUrl}/${VAPI_CALL_LOGS}?select=${columns}${dateParam}&order=started_at.desc&limit=${BATCH_SIZE}&offset=0`;
         const res = await fetch(url, { headers: SUPA_HEADERS });
-        if (!res.ok) return [];
+        if (!res.ok) return noAnswerCalls;
 
         const raw = await res.json();
         let rows: any[] = Array.isArray(raw) ? raw : (raw?.value && Array.isArray(raw.value) ? raw.value : []);
-        if (rows.length === 0) return [];
+        if (rows.length === 0) return noAnswerCalls;
 
         if (rows.length >= BATCH_SIZE) {
             const contentRange = res.headers.get('content-range');
@@ -188,9 +290,9 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
             }
         }
 
-        return rows.map(normalizeRow);
+        return [...rows.map(normalizeRow), ...noAnswerCalls];
     } catch {
-        return [];
+        return noAnswerCalls;
     }
 }
 

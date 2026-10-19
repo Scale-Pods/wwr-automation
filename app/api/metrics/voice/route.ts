@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { telephonyCost } from '@/lib/telephony-cost';
+import { normalizeCallRoute, isNoAnswerStatus, CALL_ROUTES } from '@/app/api/calls/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,8 +40,15 @@ export interface VoiceMetrics {
     durationBuckets: { label: string; calls: number }[];
     costByDay: { date: string; calls: number; cost: number }[];
     positiveCount: number;
+    curiousCount: number;
+    positiveOrCuriousRate: number;
+    noAnswerCalls: number;
     recordingCount: number;
-    sentimentBreakdown: { positive: number; negative: number; neutral: number };
+    sentimentBreakdown: { positive: number; negative: number; neutral: number; curious: number };
+    /** Per outbound-dialer route (commercial/business/residential): total
+     *  dial attempts (connected + no-answer), connected-only count, and
+     *  no-answer/no-connect count, in the selected date range. */
+    routeBreakdown: Record<string, { calls: number; connected: number; noAnswer: number; positive: number }>;
 }
 
 function endOfDay(iso: string): string {
@@ -126,7 +134,12 @@ export async function GET(req: Request) {
                 headers
             ),
             fetchAllPages(
-                `${supabaseUrl}/rest/v1/outreach_table?select=lead_id,crm_id,phone,call_1_sentiment,call_2_sentiment,call_3_sentiment,call_4_sentiment,call_5_sentiment,call_6_sentiment,call_7_sentiment,call_8_sentiment`,
+                (() => {
+                    const callSlotCols = Array.from({ length: 8 }, (_, i) => i + 1)
+                        .flatMap(n => [`call_${n}_date`, `call_${n}_status`, `call_${n}_sentiment`])
+                        .join(',');
+                    return `${supabaseUrl}/rest/v1/outreach_table?select=lead_id,crm_id,phone,call_route,${callSlotCols}`;
+                })(),
                 headers
             ).catch(() => [] as any[]),
         ]);
@@ -164,8 +177,8 @@ export async function GET(req: Request) {
 
         // ── Aggregate dated rows ──────────────────────────────────────────
         let totalCalls = 0, totalDuration = 0, totalCost = 0;
-        let completedCalls = 0, answeredCalls = 0, positiveCount = 0, recordingCount = 0;
-        let sentimentPos = 0, sentimentNeg = 0, sentimentNeutral = 0;
+        let completedCalls = 0, answeredCalls = 0, positiveCount = 0, curiousCount = 0, recordingCount = 0;
+        let sentimentPos = 0, sentimentNeg = 0, sentimentNeutral = 0, sentimentCurious = 0;
         // Overall pickup/completion — "completed" = real conversation end reason.
         let overallCompletedCount = 0;
         const dailyMap: Record<string, { calls: number; cost: number }> = {};
@@ -183,6 +196,11 @@ export async function GET(req: Request) {
         let b2bConnected = 0, b2cConnected = 0;
         let b2bCompleted = 0, b2cCompleted = 0;
         let b2bPositiveCount = 0, b2cPositiveCount = 0;
+
+        const routeBreakdown: VoiceMetrics['routeBreakdown'] = {};
+        for (const route of CALL_ROUTES) {
+            routeBreakdown[route] = { calls: 0, connected: 0, noAnswer: 0, positive: 0 };
+        }
 
         datedRows.forEach((r: any) => {
             const dur = r.duration_seconds || 0;
@@ -210,9 +228,25 @@ export async function GET(req: Request) {
             // lead_id + chronological call order (see sentimentById above).
             const sentiment = String(sentimentById.get(r.id) || '').toLowerCase();
             const isPositive = sentiment.includes('positive');
+            const isCurious = sentiment.includes('curious');
             if (isPositive) { sentimentPos++; positiveCount++; }
+            else if (isCurious) { sentimentCurious++; curiousCount++; }
             else if (sentiment.includes('negative')) sentimentNeg++;
             else sentimentNeutral++;
+
+            // Route (commercial/business/residential) comes from the matched
+            // lead's call_route column, same resolution as sentiment above.
+            let routeLead = r.lead_id ? leadByKey.get(String(r.lead_id)) : undefined;
+            if (!routeLead) {
+                const cp = String(r.customer_phone || '').replace(/\D/g, '');
+                if (cp.length >= 6) routeLead = leadByPhone.get(cp);
+            }
+            const route = routeLead ? normalizeCallRoute(routeLead.call_route) : null;
+            if (route) {
+                routeBreakdown[route].calls++;
+                if (isCompleted) routeBreakdown[route].connected++;
+                if (isPositive) routeBreakdown[route].positive++;
+            }
 
             if (isB2b) {
                 b2bCalls++;
@@ -250,6 +284,32 @@ export async function GET(req: Request) {
             }
         });
 
+        // No-answer/no-connect attempts never produce a vapi_call_logs row
+        // (see /api/calls's synthesizeNoAnswerCalls for why), so they're
+        // counted here directly from outreach_table's call_N_status/date
+        // columns, scoped to the same date range as datedRows above, and
+        // folded into totalCalls so every dashboard/analytics headline
+        // number reflects the complete picture, not just connected calls.
+        const fromMs = new Date(fromISO).getTime();
+        const toMs = new Date(toISO).getTime();
+        let noAnswerCalls = 0;
+        for (const l of leadRows) {
+            const route = normalizeCallRoute(l.call_route);
+            for (let n = 1; n <= 8; n++) {
+                const status = l[`call_${n}_status`];
+                if (!isNoAnswerStatus(status)) continue;
+                const dateRaw = l[`call_${n}_date`];
+                if (!dateRaw) continue;
+                const t = new Date(dateRaw).getTime();
+                if (isNaN(t) || t < fromMs || t > toMs) continue;
+                totalCalls++;
+                noAnswerCalls++;
+                if (!route) continue;
+                routeBreakdown[route].calls++;
+                routeBreakdown[route].noAnswer++;
+            }
+        }
+
         // ── All-time aggregation ──────────────────────────────────────────
         let allTimeB2bCalls = 0, allTimeB2cCalls = 0;
         allTimeRows.forEach((r: any) => {
@@ -276,6 +336,7 @@ export async function GET(req: Request) {
         // the call), across every call in range, not just a B2B/B2C subset.
         const overallRate = totalCalls > 0 ? Math.round((overallCompletedCount / totalCalls) * 1000) / 10 : 0;
         const overallPositiveRate = totalCalls > 0 ? Math.round((sentimentPos / totalCalls) * 1000) / 10 : 0;
+        const overallPositiveOrCuriousRate = totalCalls > 0 ? Math.round(((sentimentPos + sentimentCurious) / totalCalls) * 1000) / 10 : 0;
 
         const metrics: VoiceMetrics = {
             totalCalls,
@@ -289,6 +350,8 @@ export async function GET(req: Request) {
             pickupRate: overallRate,
             completionRate: overallRate,
             positiveRate: overallPositiveRate,
+            positiveOrCuriousRate: overallPositiveOrCuriousRate,
+            noAnswerCalls,
             b2bCalls,
             b2cCalls,
             b2bConnected,
@@ -310,8 +373,10 @@ export async function GET(req: Request) {
             durationBuckets: durationBuckets.map(b => ({ label: b.label, calls: b.count })),
             costByDay: dailyVolume,
             positiveCount,
+            curiousCount,
             recordingCount,
-            sentimentBreakdown: { positive: sentimentPos, negative: sentimentNeg, neutral: sentimentNeutral },
+            sentimentBreakdown: { positive: sentimentPos, negative: sentimentNeg, neutral: sentimentNeutral, curious: sentimentCurious },
+            routeBreakdown,
         };
 
         return new NextResponse(JSON.stringify(metrics), {

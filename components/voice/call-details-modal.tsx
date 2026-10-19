@@ -31,13 +31,17 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
     const audioUrl = displayCall.audio_url || displayCall.recordingUrl || null;
 
     useEffect(() => {
-        if (open && call?.id) {
-            setFullCall(call);
-            fetch(`/api/calls/${call.id}`)
-                .then(res => res.ok ? res.json() : null)
-                .then(data => { if (data) setFullCall(data); })
-                .catch(err => console.error("Error fetching details", err));
-        }
+        if (!open || !call?.id) return;
+        setFullCall(call);
+        // Synthesized no-answer/no-connect rows (id "noanswer-...") never reached
+        // Vapi/ElevenLabs, so there's nothing to fetch — the row's own data
+        // (status, note, sentiment) from /api/calls is already everything
+        // this modal can show for them.
+        if (call.isNoAnswer) return;
+        fetch(`/api/calls/${call.id}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data) setFullCall(data); })
+            .catch(err => console.error("Error fetching details", err));
     }, [open, call]);
 
     const messages = parseCallTranscript(displayCall);
@@ -249,7 +253,12 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                             {(!messages || messages.length === 0) ? (
                                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--label-tertiary)', gap: 8 }}>
                                     <FileText style={{ width: 20, height: 20, opacity: 0.2 }} />
-                                    <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>No Transcript Found</p>
+                                    <p style={{ fontSize: 12, fontWeight: 500, margin: 0 }}>
+                                        {call?.isNoAnswer ? 'Call did not connect — no transcript was generated.' : 'No Transcript Found'}
+                                    </p>
+                                    {call?.isNoAnswer && call?.endedReason && (
+                                        <p style={{ fontSize: 11, color: 'var(--label-quaternary)', margin: 0 }}>{call.endedReason}</p>
+                                    )}
                                 </div>
                             ) : (
                                 messages.filter((m: any) => m.role !== 'system').map((msg: any, idx: number) => {
@@ -333,6 +342,12 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                                 <span style={{ fontSize: 10, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Agent</span>
                                 <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--label-primary)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{assistantName}</p>
                             </div>
+                            {call?.callRoute && (
+                                <div>
+                                    <span style={{ fontSize: 10, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Route</span>
+                                    <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--label-primary)', margin: '2px 0 0', textTransform: 'capitalize' }}>{call.callRoute}</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

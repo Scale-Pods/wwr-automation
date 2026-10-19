@@ -1,6 +1,6 @@
 "use client";
 
-import { Phone, Clock, TrendingUp, Timer, RefreshCw } from "lucide-react";
+import { Phone, Clock, TrendingUp, Timer, RefreshCw, PhoneMissed, PhoneOff } from "lucide-react";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useEffect, useState } from "react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -87,6 +87,13 @@ export default function VoiceDashboardPage() {
     const b2bCalls = m?.b2bCalls ?? 0;
     const b2cCalls = m?.b2cCalls ?? 0;
 
+    const ROUTE_META: Record<string, { label: string; color: string }> = {
+        commercial: { label: 'Commercial', color: 'var(--orange)' },
+        business: { label: 'Business', color: 'var(--blue)' },
+        residential: { label: 'Residential', color: 'var(--green)' },
+    };
+    const routeBreakdown = m?.routeBreakdown ?? {};
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40, position: 'relative', minHeight: 500 }}>
             {loading && (
@@ -159,6 +166,58 @@ export default function VoiceDashboardPage() {
                     accentColor="var(--orange)"
                     icon={<Timer size={17} />}
                 />
+                <MetricTile
+                    title="No Answer"
+                    value={`${(m?.noAnswerCalls ?? 0).toLocaleString()} calls`}
+                    accentColor="var(--red)"
+                    icon={<PhoneMissed size={17} />}
+                />
+            </div>
+
+            {/* Calls by Route */}
+            <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                    <div style={{
+                        width: 32, height: 32, borderRadius: 9,
+                        background: 'rgba(175,82,222,0.12)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--purple)',
+                    }}>
+                        <PhoneOff size={15} />
+                    </div>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.022em', color: 'var(--label-primary)' }}>
+                        Calls by Route
+                    </h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {(Object.keys(ROUTE_META) as Array<keyof typeof ROUTE_META>).map(route => {
+                        const d = routeBreakdown[route] ?? { calls: 0, connected: 0, noAnswer: 0, positive: 0 };
+                        const meta = ROUTE_META[route];
+                        const connectRate = d.calls > 0 ? Math.round((d.connected / d.calls) * 1000) / 10 : 0;
+                        return (
+                            <div key={route} className="liquid-card" style={{ padding: '14px 16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: meta.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{meta.label}</span>
+                                    <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--label-primary)' }}>{d.calls}</span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
+                                        <span>Connected</span>
+                                        <span style={{ fontWeight: 600, color: 'var(--green)' }}>{d.connected} ({connectRate}%)</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
+                                        <span>No Answer / No Connect</span>
+                                        <span style={{ fontWeight: 600, color: 'var(--red)' }}>{d.noAnswer}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
+                                        <span>Positive Sentiment</span>
+                                        <span style={{ fontWeight: 600, color: 'var(--blue)' }}>{d.positive}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* Charts */}

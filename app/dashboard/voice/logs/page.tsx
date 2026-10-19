@@ -13,6 +13,22 @@ import { format, subDays } from "date-fns";
 import { formatDuration } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
+const ROUTE_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
+    commercial: { bg: 'rgba(255,149,0,0.12)', fg: 'var(--orange)', label: 'Commercial' },
+    business: { bg: 'rgba(10,132,255,0.10)', fg: 'var(--blue)', label: 'Business' },
+    residential: { bg: 'rgba(48,209,88,0.12)', fg: 'var(--green)', label: 'Residential' },
+};
+
+const RouteBadge = ({ route }: { route: string | null }) => {
+    const c = route ? ROUTE_COLORS[route] : null;
+    if (!c) return <span style={{ fontSize: 11, color: 'var(--label-quaternary)' }}>—</span>;
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 'var(--radius-xs)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: c.bg, color: c.fg }}>
+            {c.label}
+        </span>
+    );
+};
+
 const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
     let guestName = call.name || "Guest";
     const guestNum = call.phone || "Unknown";
@@ -40,6 +56,9 @@ const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
                 </div>
             </td>
             <td style={{ padding: '10px 14px', fontSize: 12, fontFamily: 'monospace', color: 'var(--label-secondary)', whiteSpace: 'nowrap' }}>{guestNum}</td>
+            <td style={{ padding: '10px 14px' }}>
+                <RouteBadge route={call.callRoute} />
+            </td>
             <td style={{ padding: '10px 14px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 'var(--radius-xs)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: 'rgba(10,132,255,0.10)', color: 'var(--blue)' }}>
@@ -109,7 +128,8 @@ export default function VoiceLogsPage() {
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
     const [sentimentFilter, setSentimentFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
-    const [accountFilter, setAccountFilter] = useState("all");
+    const [routeFilter, setRouteFilter] = useState("all");
+    const [answeredFilter, setAnsweredFilter] = useState("all");
     const [phoneFilter, setPhoneFilter] = useState("");
     const [sortBy, setSortBy] = useState("newest");
     const [costModalOpen, setCostModalOpen] = useState(false);
@@ -165,25 +185,21 @@ export default function VoiceLogsPage() {
         setAllCallsMapped(mappedCalls);
     }, [globalCalls, leads, loadingLeads]);
 
-    // Board/account dropdown options are built from whatever vapi_account
-    // values actually appear in the data (e.g. "Residential leads", "Business
-    // leads", "Commercial leads", "called leads") — never a hardcoded list.
-    const accountOptions = Array.from(
-        new Set(allCallsMapped.map((c: any) => c.vapiAccount).filter(Boolean))
-    ).sort();
-
     useEffect(() => {
         setCurrentPage(1);
-    }, [dateRange, sentimentFilter, typeFilter, accountFilter, phoneFilter, sortBy]);
+    }, [dateRange, sentimentFilter, typeFilter, routeFilter, answeredFilter, phoneFilter, sortBy]);
 
     useEffect(() => {
         const filteredCalls = allCallsMapped.filter((call: any) => {
-            if (accountFilter !== 'all' && call.vapiAccount !== accountFilter) return false;
+            if (routeFilter !== 'all' && call.callRoute !== routeFilter) return false;
+            if (answeredFilter === 'answered' && call.isNoAnswer) return false;
+            if (answeredFilter === 'not-answered' && !call.isNoAnswer) return false;
             if (sentimentFilter !== "all") {
                 const s = String(call.sentiment || "").toLowerCase();
                 if (sentimentFilter === "positive" && !s.includes("positive")) return false;
+                if (sentimentFilter === "curious" && !s.includes("curious")) return false;
                 if (sentimentFilter === "negative" && !s.includes("negative")) return false;
-                if (sentimentFilter === "neutral" && (s.includes("positive") || s.includes("negative"))) return false;
+                if (sentimentFilter === "neutral" && (s.includes("positive") || s.includes("curious") || s.includes("negative"))) return false;
             }
             if (typeFilter !== "all") {
                 const normalizedCallType = (call.type || (call.isInbound ? "Inbound" : "Outbound")).toLowerCase();
@@ -211,7 +227,7 @@ export default function VoiceLogsPage() {
         });
 
         setCalls(sortedCalls);
-    }, [allCallsMapped, dateRange, sentimentFilter, typeFilter, accountFilter, phoneFilter, sortBy]);
+    }, [allCallsMapped, dateRange, sentimentFilter, typeFilter, routeFilter, answeredFilter, phoneFilter, sortBy]);
 
     const handleRefresh = () => {
         refreshCalls({ from: dateRange?.from, to: dateRange?.to || dateRange?.from, includeElevenLabs: false, provider: 'vapi', force: true });
@@ -269,14 +285,26 @@ export default function VoiceLogsPage() {
                     </div>
 
                     <div>
-                        <label style={{ display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', marginBottom: 5 }}>Board</label>
-                        <Select value={accountFilter} onValueChange={setAccountFilter}>
-                            <SelectTrigger style={{ width: '100%', height: 36, fontSize: 12 }}><SelectValue placeholder="Board" /></SelectTrigger>
+                        <label style={{ display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', marginBottom: 5 }}>Call Outcome</label>
+                        <Select value={answeredFilter} onValueChange={setAnsweredFilter}>
+                            <SelectTrigger style={{ width: '100%', height: 36, fontSize: 12 }}><SelectValue placeholder="Call Outcome" /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Boards</SelectItem>
-                                {accountOptions.map(acc => (
-                                    <SelectItem key={acc} value={acc}>{acc}</SelectItem>
-                                ))}
+                                <SelectItem value="all">All Calls</SelectItem>
+                                <SelectItem value="answered">Answered</SelectItem>
+                                <SelectItem value="not-answered">Not Answered</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', marginBottom: 5 }}>Route</label>
+                        <Select value={routeFilter} onValueChange={setRouteFilter}>
+                            <SelectTrigger style={{ width: '100%', height: 36, fontSize: 12 }}><SelectValue placeholder="Route" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Routes</SelectItem>
+                                <SelectItem value="commercial">Commercial</SelectItem>
+                                <SelectItem value="business">Business</SelectItem>
+                                <SelectItem value="residential">Residential</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -300,6 +328,7 @@ export default function VoiceLogsPage() {
                             <SelectContent>
                                 <SelectItem value="all">All Sentiment</SelectItem>
                                 <SelectItem value="positive">Positive</SelectItem>
+                                <SelectItem value="curious">Curious</SelectItem>
                                 <SelectItem value="neutral">Neutral</SelectItem>
                                 <SelectItem value="negative">Negative</SelectItem>
                             </SelectContent>
@@ -320,7 +349,7 @@ export default function VoiceLogsPage() {
                     </div>
 
                     <button style={{ fontSize: 11, fontWeight: 600, color: 'var(--label-secondary)', background: 'var(--fill-tertiary)', border: '1px solid var(--glass-border)', padding: '7px 12px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', height: 34 }}
-                        onClick={() => { setPhoneFilter(''); setAccountFilter('all'); setTypeFilter('all'); setSentimentFilter('all'); setSortBy('newest'); }}>
+                        onClick={() => { setPhoneFilter(''); setRouteFilter('all'); setAnsweredFilter('all'); setTypeFilter('all'); setSentimentFilter('all'); setSortBy('newest'); }}>
                         Reset Filters
                     </button>
                 </aside>
@@ -330,7 +359,7 @@ export default function VoiceLogsPage() {
                         <table className="w-full text-left">
                             <thead style={{ borderBottom: '1px solid var(--hairline)' }}>
                                 <tr style={{ background: 'var(--fill-quaternary)' }}>
-                                    {['Name', 'Guest Number', 'Type', 'Duration', 'Country / Code', 'Cost', 'Status', 'Date & Time'].map(h => (
+                                    {['Name', 'Guest Number', 'Route', 'Type', 'Duration', 'Country / Code', 'Cost', 'Status', 'Date & Time'].map(h => (
                                         <th key={h} style={{ padding: '10px 14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label-tertiary)', whiteSpace: 'nowrap' }}>{h}</th>
                                     ))}
                                 </tr>
@@ -338,7 +367,7 @@ export default function VoiceLogsPage() {
                             <tbody>
                                 {calls.length === 0 && !loading ? (
                                     <tr>
-                                        <td colSpan={8} style={{ padding: '60px 16px', textAlign: 'center', fontSize: 13, color: 'var(--label-tertiary)' }}>No calls matching filters.</td>
+                                        <td colSpan={9} style={{ padding: '60px 16px', textAlign: 'center', fontSize: 13, color: 'var(--label-tertiary)' }}>No calls matching filters.</td>
                                     </tr>
                                 ) : (
                                     paginatedCalls.map((call) => (
@@ -351,8 +380,13 @@ export default function VoiceLogsPage() {
                                         >
                                             <DynamicRowCells call={call} leads={leads} />
                                             <td style={{ padding: '10px 14px' }}>
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 'var(--radius-xs)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: call.status === 'answered' ? 'rgba(48,209,88,0.12)' : 'var(--fill-tertiary)', color: call.status === 'answered' ? 'var(--green)' : 'var(--label-tertiary)', border: `1px solid ${call.status === 'answered' ? 'transparent' : 'var(--hairline)'}` }}>
-                                                    {call.status}
+                                                <span style={{
+                                                    display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 'var(--radius-xs)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+                                                    background: call.status === 'answered' ? 'rgba(48,209,88,0.12)' : call.isNoAnswer ? 'rgba(255,69,58,0.10)' : 'var(--fill-tertiary)',
+                                                    color: call.status === 'answered' ? 'var(--green)' : call.isNoAnswer ? 'var(--red)' : 'var(--label-tertiary)',
+                                                    border: `1px solid ${call.status === 'answered' || call.isNoAnswer ? 'transparent' : 'var(--hairline)'}`,
+                                                }}>
+                                                    {call.isNoAnswer ? 'No Answer' : call.status}
                                                 </span>
                                             </td>
                                             <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--label-tertiary)', whiteSpace: 'nowrap' }}>{call.displayDate}</td>

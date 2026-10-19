@@ -71,8 +71,12 @@ export interface VoiceMetrics {
     durationBuckets: { label: string; calls: number }[];
     costByDay: { date: string; calls: number; cost: number }[];
     positiveCount: number;
+    curiousCount: number;
+    positiveOrCuriousRate: number;
+    noAnswerCalls: number;
     recordingCount: number;
-    sentimentBreakdown: { positive: number; negative: number; neutral: number };
+    sentimentBreakdown: { positive: number; negative: number; neutral: number; curious: number };
+    routeBreakdown: Record<string, { calls: number; connected: number; noAnswer: number; positive: number }>;
 }
 
 interface DataContextType {
