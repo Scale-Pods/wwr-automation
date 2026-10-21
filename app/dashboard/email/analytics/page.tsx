@@ -6,9 +6,11 @@ import {
     TrendingUp,
     AlertTriangle,
     CheckCircle2,
-    Users
+    Users,
+    Flame,
+    Info
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     AreaChart,
     Area,
@@ -19,94 +21,72 @@ import {
     ResponsiveContainer,
     Legend
 } from "recharts";
+import {
+    Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
-import { subDays, format } from "date-fns";
-import { useData } from "@/context/DataContext";
-import { coerceTimestamp, isReplyTrackPositive, hasEmailReply } from "@/lib/outreach-types";
-import type { OutreachLead } from "@/lib/outreach-types";
+import { subDays, format, startOfDay, endOfDay } from "date-fns";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
-import { matchesBoard, type EmailBoardKey } from "@/lib/email-board";
+import { type EmailBoardKey } from "@/lib/email-board";
+import type { EmailMetrics } from "@/app/api/metrics/email/route";
+
+function InfoTooltip({ text }: { text: string }) {
+    return (
+        <TooltipProvider>
+            <UITooltip>
+                <TooltipTrigger asChild>
+                    <div style={{ display: "inline-flex", cursor: "help" }}>
+                        <Info style={{ width: 13, height: 13, color: "var(--label-tertiary)" }} />
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent style={{ maxWidth: 240, padding: "8px 10px", fontSize: 11, lineHeight: 1.5, background: "var(--bg-layer1)", color: "var(--label-primary)", border: "1px solid var(--hairline)" }}>
+                    {text}
+                </TooltipContent>
+            </UITooltip>
+        </TooltipProvider>
+    );
+}
 
 export default function EmailAnalyticsPage() {
-    const { leads: allLeads, loadingLeads } = useData();
     const [board, setBoard] = useState<EmailBoardKey>("all");
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
         from: subDays(new Date(), 30),
         to: new Date(),
     });
+    const [metrics, setMetrics] = useState<EmailMetrics | null>(null);
+    const [loadingLeads, setLoadingLeads] = useState(true);
 
-    const leadStats = useMemo(() => {
-        if (loadingLeads) return { totalSent: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, totalLeads: 0 };
-        const start = dateRange?.from;
-        const end = dateRange?.to;
-        const inRange = (d: Date | null) => {
-            if (!d || isNaN(d.getTime())) return false;
-            if (start && d < start) return false;
-            if (end) { const toDate = new Date(end); toDate.setHours(23, 59, 59, 999); if (d > toDate) return false; }
-            return true;
-        };
+    // All totals and the daily trend are computed server-side in
+    // /api/metrics/email — the client only renders them.
+    const fetchMetrics = useCallback(async (from: Date, to: Date, b: EmailBoardKey) => {
+        setLoadingLeads(true);
+        try {
+            const fromISO = startOfDay(from).toISOString();
+            const toISO = endOfDay(to).toISOString();
+            const res = await fetch(`/api/metrics/email?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}&board=${encodeURIComponent(b)}`);
+            setMetrics(res.ok ? await res.json() : null);
+        } catch (err) {
+            console.error('[email analytics fetch]', err);
+            setMetrics(null);
+        } finally {
+            setLoadingLeads(false);
+        }
+    }, []);
 
-        // email_slots already only contains slots where email_N itself has content
-        // (see buildEmailSlots) — no need to re-check status/sent_at here.
-        const filtered = (allLeads as OutreachLead[]).filter(lead => {
-            if (!matchesBoard(lead, board)) return false;
-            const hasEmail = lead.email_slots.length > 0 || isReplyTrackPositive(lead.email_reply_track);
-            if (!hasEmail) return false;
-            const dateRef = lead.email_slots.length > 0
-                ? (coerceTimestamp(lead.email_slots[0]?.sent_at) || lead.created_at)
-                : (lead.last_activity || lead.updated_at || lead.created_at);
-            return inRange(dateRef ? new Date(dateRef) : null);
-        });
+    useEffect(() => {
+        if (!dateRange?.from) return;
+        fetchMetrics(dateRange.from, dateRange.to || dateRange.from, board);
+    }, [dateRange, board, fetchMetrics]);
 
-        let sent = 0, replies = 0, posSentiment = 0, negSentiment = 0;
-        filtered.forEach(lead => {
-            sent += lead.email_slots.length;
-            if (hasEmailReply(lead)) replies++;
-            const sentiment = String(lead.email_sentiment || "").toLowerCase();
-            if (sentiment.includes("positive")) posSentiment++;
-            if (sentiment.includes("negative")) negSentiment++;
-        });
+    const leadStats = metrics ?? { totalEmailsSent: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, totalEoiLeads: 0, totalLeadsEmailed: 0, perStep: [0, 0, 0, 0, 0, 0, 0, 0], dailyTrend: [] };
 
-        return { totalSent: sent, totalReplies: replies, totalPosSentiment: posSentiment, totalNegSentiment: negSentiment, totalLeads: filtered.length };
-    }, [allLeads, loadingLeads, dateRange, board]);
+    const chartData = leadStats.dailyTrend.map(item => ({
+        ...item,
+        displayDate: format(new Date(item.date + 'T00:00:00'), 'MMM dd'),
+    }));
 
-    const chartData = useMemo(() => {
-        if (loadingLeads) return [];
-        const start = dateRange?.from;
-        const end = dateRange?.to;
-
-        const counts: Record<string, { date: string, sent: number, replies: number }> = {};
-
-        (allLeads as OutreachLead[]).forEach(lead => {
-            if (!matchesBoard(lead, board)) return;
-            // Only leads with at least one real sent email (email_N present) contribute
-            // to the "sent" trend — a lead with only reply-track activity has no sent count.
-            if (lead.email_slots.length === 0) return;
-            const dateRef = coerceTimestamp(lead.email_slots[0]?.sent_at) || lead.created_at;
-            if (!dateRef) return;
-            const d = new Date(dateRef);
-            if (start && d < start) return;
-            if (end) { const toDate = new Date(end); toDate.setHours(23, 59, 59, 999); if (d > toDate) return; }
-            const dateKey = d.toISOString().split("T")[0];
-
-            const sent = lead.email_slots.length;
-            const isReplied = hasEmailReply(lead);
-
-            if (!counts[dateKey]) counts[dateKey] = { date: dateKey, sent: 0, replies: 0 };
-            counts[dateKey].sent += sent;
-            if (isReplied) counts[dateKey].replies += 1;
-        });
-
-        return Object.values(counts)
-            .sort((a, b) => a.date.localeCompare(b.date))
-            .map(item => ({
-                ...item,
-                displayDate: format(new Date(item.date + 'T00:00:00'), 'MMM dd')
-            }));
-    }, [allLeads, loadingLeads, dateRange, board]);
-
-    const { totalSent, totalReplies, totalPosSentiment, totalNegSentiment, totalLeads } = leadStats;
+    const { totalEmailsSent: totalSent, totalReplies, totalPosSentiment, totalNegSentiment, totalEoiLeads, totalLeadsEmailed: totalLeads } = leadStats;
     const replyRate = totalSent > 0 ? ((totalReplies / totalSent) * 100).toFixed(2) : "0.00";
 
     return (
@@ -128,18 +108,22 @@ export default function EmailAnalyticsPage() {
             {/* Campaign Performance */}
             <div>
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--label-primary)', marginBottom: 10 }}>Campaign Performance</p>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <MetricCard label="Total Sent" value={totalSent.toLocaleString()} icon={Send} color="var(--blue)" />
-                    <MetricCard label="Replies" value={totalReplies.toLocaleString()} subtext={`${replyRate}% Rate`} icon={TrendingUp} color="var(--blue)" />
-                    <MetricCard label="Positive Sentiment" value={totalPosSentiment.toLocaleString()} icon={CheckCircle2} color="var(--green)" />
-                    <MetricCard label="Negative Sentiment" value={totalNegSentiment.toLocaleString()} icon={AlertTriangle} color="var(--orange)" />
-                    <MetricCard label="Leads Emailed" value={totalLeads.toLocaleString()} icon={Users} color="var(--label-secondary)" />
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                    <MetricCard label="Total Sent" value={totalSent.toLocaleString()} icon={Send} color="var(--blue)" info="Every outreach email we actually sent in this date range, including every follow-up step." />
+                    <MetricCard label="Replies" value={totalReplies.toLocaleString()} subtext={`${replyRate}% Rate`} icon={TrendingUp} color="var(--blue)" info="How many leads wrote back to one of our emails. The rate is Replies divided by Total Sent." />
+                    <MetricCard label="Positive Sentiment" value={totalPosSentiment.toLocaleString()} icon={CheckCircle2} color="var(--green)" info="Leads whose reply our AI read as positive — interested, engaged, or asking for more info." />
+                    <MetricCard label="Negative Sentiment" value={totalNegSentiment.toLocaleString()} icon={AlertTriangle} color="var(--orange)" info="Leads whose reply our AI read as negative — not interested, or asking to stop." />
+                    <MetricCard label="Leads Emailed" value={totalLeads.toLocaleString()} icon={Users} color="var(--label-secondary)" info="The number of different leads we emailed in this date range — each lead counted once, however many follow-ups they got." />
+                    <MetricCard label="EOI Leads" value={totalEoiLeads.toLocaleString()} icon={Flame} color="var(--purple)" info="Leads who clearly said they're interested in a property — a stronger signal than general positive sentiment." />
                 </div>
             </div>
 
             {/* Campaign Outreach Trend Chart */}
             <div className="liquid-card" style={{ padding: '20px 24px' }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--label-primary)', marginBottom: 16 }}>Campaign Outreach Trend</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--label-primary)' }}>Campaign Outreach Trend</p>
+                    <InfoTooltip text="Each day, how many emails we sent (blue) vs. how many replies came back that same day (green)." />
+                </div>
                 {chartData.length > 0 ? (
                     <div style={{ height: 360, width: '100%' }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -174,11 +158,14 @@ export default function EmailAnalyticsPage() {
     );
 }
 
-function MetricCard({ label, value, subtext, icon: Icon, color }: any) {
+function MetricCard({ label, value, subtext, icon: Icon, color, info }: any) {
     return (
         <div className="liquid-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+                    {info && <InfoTooltip text={info} />}
+                </div>
                 <div style={{ padding: 6, borderRadius: 'var(--radius-sm)', background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}>
                     <Icon style={{ width: 13, height: 13 }} />
                 </div>

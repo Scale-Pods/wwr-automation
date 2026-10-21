@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { OUTREACH_TABLE, isReplyTrackPositive, waMessagesSent, earliestWaSentDate, hasWaSend } from '@/lib/outreach-types';
+import { OUTREACH_TABLE, isReplyTrackPositive, waMessagesSent, earliestWaSentDate, hasWaSend, isHotWaSentiment } from '@/lib/outreach-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +8,7 @@ export interface WhatsappMetrics {
     totalReplies: number;
     replyRate: number;
     totalMessagesSent: number;
+    totalPositiveLeads: number;
     dailyTrend: { date: string; reachouts: number; replies: number }[];
     // legacy keys — 0 now that owner/loop split is gone
     ownerReachouts: number;
@@ -74,7 +75,7 @@ export async function GET(req: Request) {
             headers
         );
 
-        let reachouts = 0, replies = 0, messagesSent = 0;
+        let reachouts = 0, replies = 0, messagesSent = 0, positiveLeads = 0;
         const dailyMap: Record<string, { reachouts: number; replies: number }> = {};
 
         rows.forEach(r => {
@@ -85,6 +86,7 @@ export async function GET(req: Request) {
 
             reachouts++;
             messagesSent += waMessagesSent(r);
+            if (isHotWaSentiment(r.wa_sentiment)) positiveLeads++;
 
             const replied = isReplyTrackPositive(r.whatsapp_reply_track);
             if (replied) replies++;
@@ -104,6 +106,7 @@ export async function GET(req: Request) {
             totalReplies: replies,
             replyRate: reachouts > 0 ? Math.round((replies / reachouts) * 100) : 0,
             totalMessagesSent: messagesSent,
+            totalPositiveLeads: positiveLeads,
             dailyTrend,
             ownerReachouts: 0,
             ownerReplies: 0,

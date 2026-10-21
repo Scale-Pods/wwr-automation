@@ -9,7 +9,7 @@
 import {
     OutreachLead, WaSlot, EmailSlot, CallSlot,
     isReplyTrackPositive, parseJsonArray, parseJsonObject, coerceTimestamp,
-    hasEmailReply,
+    hasEmailReply, isEmailSlotSent,
 } from './outreach-types';
 
 /** Kept for backwards-compat with old callers. Only `outreach` is read now. */
@@ -53,6 +53,10 @@ function buildEmailSlots(r: any): EmailSlot[] {
         // a sent email (e.g. a scheduled-but-not-yet-sent row, or stale metadata).
         if (raw === undefined || raw === null || raw === '') continue;
         const status = r[`email_${n}_status`] ?? null;
+        // A slot whose status is "received" holds the CUSTOMER's inbound reply
+        // (the pipeline sometimes stores it here instead of email_conversation),
+        // not something we sent — exclude it so replies don't leak into "sent".
+        if (!isEmailSlotSent(status)) continue;
         const sent_at = r[`email_${n}_sent_at`] ?? null;
         const obj = parseJsonObject(raw);
         const body = obj

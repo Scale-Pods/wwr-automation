@@ -5,7 +5,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
 } from "recharts";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Info } from "lucide-react";
+import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Info, Flame } from "lucide-react";
 import {
     Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -28,6 +28,7 @@ export default function WhatsappAnalyticsPage() {
     });
 
     const [leads, setLeads] = useState<any[]>([]);
+    const [serverMetrics, setServerMetrics] = useState<{ totalPositiveLeads: number } | null>(null);
     const [loading, setLoading] = useState(true);
 
     const fetchData = useCallback(async (from: Date, to: Date) => {
@@ -35,11 +36,18 @@ export default function WhatsappAnalyticsPage() {
         const fromISO = startOfDay(from).toISOString();
         const toISO = endOfDay(to).toISOString();
         try {
-            const r = await fetch(`/api/whatsapp-leads?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`);
+            const [r, m] = await Promise.all([
+                fetch(`/api/whatsapp-leads?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`),
+                fetch(`/api/metrics/whatsapp?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`),
+            ]);
             const d = r.ok ? await r.json() : null;
             setLeads(d ? (d.leads || d.nr_wf || []) : []);
+            // Positive leads (wa_sentiment = "hot") is computed server-side in
+            // /api/metrics/whatsapp — never re-derived from raw rows on the client.
+            setServerMetrics(m.ok ? await m.json() : null);
         } catch {
             setLeads([]);
+            setServerMetrics(null);
         } finally {
             setLoading(false);
         }
@@ -108,17 +116,21 @@ export default function WhatsappAnalyticsPage() {
 
             <div>
                 <p style={{ fontSize: 10, fontWeight: 700, color: "var(--label-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>WhatsApp Campaign Performance</p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <StatCard title="Messages Sent" value={loading ? "..." : stats.sentCount.toLocaleString()} icon={Send} color="var(--blue)" />
-                    <StatCard title="Unique Contacted" value={loading ? "..." : stats.uniqueSentCount.toLocaleString()} icon={Users} color="var(--label-secondary)" info="Unique leads with at least one wa_N message in range." />
-                    <StatCard title="Total Replies" value={loading ? "..." : stats.totalReplies.toLocaleString()} icon={MessageSquare} color="var(--green)" info="Derived from whatsapp_reply_track and the whatsapp_conversation jsonb." />
-                    <StatCard title="Response Rate" value={loading ? "..." : `${replyRate}%`} icon={TrendingUp} color="var(--purple)" />
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                    <StatCard title="Messages Sent" value={loading ? "..." : stats.sentCount.toLocaleString()} icon={Send} color="var(--blue)" info="Every WhatsApp message we sent out to leads in this date range, across all follow-ups." />
+                    <StatCard title="Unique Contacted" value={loading ? "..." : stats.uniqueSentCount.toLocaleString()} icon={Users} color="var(--label-secondary)" info="The number of different leads we messaged on WhatsApp in this date range — each lead counted once, no matter how many messages they got." />
+                    <StatCard title="Total Replies" value={loading ? "..." : stats.totalReplies.toLocaleString()} icon={MessageSquare} color="var(--green)" info="How many of those leads replied back to us on WhatsApp." />
+                    <StatCard title="Response Rate" value={loading ? "..." : `${replyRate}%`} icon={TrendingUp} color="var(--purple)" info="Total Replies divided by Unique Contacted — the share of contacted leads who wrote back." />
+                    <StatCard title="Positive Leads" value={loading ? "..." : (serverMetrics?.totalPositiveLeads ?? 0).toLocaleString()} icon={Flame} color="var(--red)" info="Leads our AI marked as 'hot' based on how interested they sounded in the conversation." />
                 </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
                 <div className="liquid-card" style={{ padding: "16px" }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--label-primary)", marginBottom: 2 }}>Engagement Trend</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--label-primary)" }}>Engagement Trend</p>
+                        <InfoTooltip text="Each day, how many leads we reached out to on WhatsApp (blue) vs. how many wrote back that same day (green)." />
+                    </div>
                     <p style={{ fontSize: 11, color: "var(--label-tertiary)", marginBottom: 12 }}>Outbound reachouts vs incoming replies per day</p>
                     <div style={{ height: 260, width: "100%" }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -145,6 +157,23 @@ export default function WhatsappAnalyticsPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+function InfoTooltip({ text }: { text: string }) {
+    return (
+        <TooltipProvider>
+            <UITooltip>
+                <TooltipTrigger asChild>
+                    <div style={{ display: "inline-flex", cursor: "help" }}>
+                        <Info style={{ width: 13, height: 13, color: "var(--label-tertiary)" }} />
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent style={{ maxWidth: 240, padding: "8px 10px", fontSize: 11, lineHeight: 1.5, background: "var(--bg-layer1)", color: "var(--label-primary)", border: "1px solid var(--hairline)" }}>
+                    {text}
+                </TooltipContent>
+            </UITooltip>
+        </TooltipProvider>
     );
 }
 

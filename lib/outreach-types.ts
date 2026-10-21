@@ -227,6 +227,37 @@ export function isInboundMessage(m: any): boolean {
 }
 
 /**
+ * email_N_status values seen on outreach_table: "Sent" (we sent it), "received"
+ * (the customer's inbound reply got stored in this slot instead of
+ * email_conversation), or "-" / empty (placeholder, nothing sent). Only "Sent"
+ * (or any status that isn't an inbound/placeholder marker) counts as an actual
+ * outbound email — this is what keeps received replies out of "Sent Emails".
+ */
+const EMAIL_SLOT_NOT_SENT_STATUSES = new Set(['received', 'inbound', 'reply', 'replied', '-', '']);
+export function isEmailSlotSent(status: any): boolean {
+    const s = String(status ?? '').trim().toLowerCase();
+    return !EMAIL_SLOT_NOT_SENT_STATUSES.has(s);
+}
+
+/** True when outreach_table.wa_sentiment marks this lead as a hot/positive lead. */
+export function isHotWaSentiment(v: any): boolean {
+    return String(v ?? '').trim().toLowerCase() === 'hot';
+}
+
+/**
+ * True when outreach_table.email_sentiment marks this lead as an Expression Of
+ * Interest (EOI) or otherwise genuinely interested/curious lead. The column
+ * stores free text like "neutral | Status: Expression Of Interest" or
+ * "curious | Status: Expression Of Interest" — match on "expression of
+ * interest" anywhere in the string, or an overall "positive" sentiment.
+ */
+export function isEoiEmailSentiment(v: any): boolean {
+    const s = String(v ?? '').trim().toLowerCase();
+    if (!s) return false;
+    return s.includes('expression of interest') || s.includes('positive');
+}
+
+/**
  * Count of outbound WhatsApp messages for one outreach_table row.
  * The number of outbound bubbles in whatsapp_conversation, but never less than
  * the count of populated wa_1..wa_3 slots (a lead that was messaged always

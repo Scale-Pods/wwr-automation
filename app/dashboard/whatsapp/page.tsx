@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircle, Send, Users, MessageSquare, TrendingUp, BarChart3, Building2 } from "lucide-react";
+import { MessageCircle, Send, Users, MessageSquare, TrendingUp, BarChart3, Building2, Flame, Info } from "lucide-react";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -8,9 +8,29 @@ import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
+import {
+    Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
 import { isReplyTrackPositive, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, lastWaActivityDate } from "@/lib/outreach-types";
+
+function InfoTooltip({ text }: { text: string }) {
+    return (
+        <TooltipProvider>
+            <UITooltip>
+                <TooltipTrigger asChild>
+                    <div style={{ display: "inline-flex", cursor: "help" }}>
+                        <Info style={{ width: 13, height: 13, color: "var(--label-tertiary)" }} />
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent style={{ maxWidth: 240, padding: "8px 10px", fontSize: 11, lineHeight: 1.5, background: "var(--bg-layer1)", color: "var(--label-primary)", border: "1px solid var(--hairline)" }}>
+                    {text}
+                </TooltipContent>
+            </UITooltip>
+        </TooltipProvider>
+    );
+}
 
 function waActivity(lead: any) {
     const conv = parseJsonArray(lead.whatsapp_conversation);
@@ -33,13 +53,11 @@ function MetricTile({ title, value, accentColor, icon, onClick, info }: {
         >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div style={{ flex: 1 }}>
-                    <div className="tile-label">{title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div className="tile-label">{title}</div>
+                        {info && <InfoTooltip text={info} />}
+                    </div>
                     <div className="tile-value tabular-nums">{value}</div>
-                    {info && (
-                        <div style={{ fontSize: 11, color: 'var(--label-tertiary)', marginTop: 6, lineHeight: 1.3 }}>
-                            {info}
-                        </div>
-                    )}
                 </div>
                 <div style={{
                     width: 36, height: 36, borderRadius: 10,
@@ -77,6 +95,7 @@ export default function WhatsAppDashboardPage() {
     const router = useRouter();
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
     const [waData, setWaData] = useState<any>(null);
+    const [serverMetrics, setServerMetrics] = useState<{ totalPositiveLeads: number } | null>(null);
     const [loading, setLoading] = useState(true);
 
     const fetchData = useCallback(async (from: Date, to: Date) => {
@@ -84,10 +103,16 @@ export default function WhatsAppDashboardPage() {
         try {
             const fromISO = startOfDay(from).toISOString();
             const toISO = endOfDay(to).toISOString();
-            const res = await fetch(`/api/whatsapp-leads?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`);
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
+            const [leadsRes, metricsRes] = await Promise.all([
+                fetch(`/api/whatsapp-leads?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`),
+                fetch(`/api/metrics/whatsapp?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`),
+            ]);
+            if (!leadsRes.ok) throw new Error(await leadsRes.text());
+            const data = await leadsRes.json();
             setWaData(data);
+            // Positive leads (wa_sentiment = "hot") is computed server-side in
+            // /api/metrics/whatsapp — never re-derived from raw rows on the client.
+            setServerMetrics(metricsRes.ok ? await metricsRes.json() : null);
         } catch (err) {
             console.error('[WA dashboard fetch]', err);
         } finally {
@@ -182,18 +207,21 @@ export default function WhatsAppDashboardPage() {
                         accentColor="var(--blue)"
                         icon={<Users size={17} />}
                         onClick={() => router.push('/dashboard/whatsapp/leads')}
+                        info="The number of different leads we messaged on WhatsApp in this date range — each lead counted once, however many messages they got."
                     />
                     <MetricTile
                         title="Total Replies"
                         value={loading ? '—' : stats.totalReplies.toLocaleString()}
                         accentColor="var(--green)"
                         icon={<MessageCircle size={17} />}
+                        info="How many of those leads replied back to us on WhatsApp."
                     />
                     <MetricTile
                         title="Total Messages Sent"
                         value={loading ? '—' : stats.sentCount.toLocaleString()}
                         accentColor="var(--purple)"
                         icon={<Send size={17} />}
+                        info="Every WhatsApp message we sent out, including every follow-up — so one lead can account for several of these."
                     />
                     <MetricTile
                         title="PF Leads"
@@ -201,6 +229,14 @@ export default function WhatsAppDashboardPage() {
                         accentColor="var(--yellow)"
                         icon={<Building2 size={17} />}
                         onClick={() => router.push('/dashboard/whatsapp/leads?pfLead=1')}
+                        info="Leads that came in through Property Finder rather than our website."
+                    />
+                    <MetricTile
+                        title="Positive Leads"
+                        value={loading ? '—' : (serverMetrics?.totalPositiveLeads ?? 0).toLocaleString()}
+                        accentColor="var(--red)"
+                        icon={<Flame size={17} />}
+                        info="Leads our AI marked as 'hot' based on how interested they sounded in the conversation."
                     />
                 </div>
             </div>
@@ -221,6 +257,7 @@ export default function WhatsAppDashboardPage() {
                         <h3 style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.022em', color: 'var(--label-primary)' }}>
                             Conversion Funnel
                         </h3>
+                        <InfoTooltip text="How outreach narrows down: Unique Leads we messaged, how many Total Messages that took, and how many Replies came back." />
                     </div>
                     <div style={{ height: 180 }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -266,6 +303,7 @@ export default function WhatsAppDashboardPage() {
                         <h3 style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.022em', color: 'var(--label-primary)' }}>
                             Activity Trend
                         </h3>
+                        <InfoTooltip text="Each day, how many leads we reached out to on WhatsApp (blue) vs. how many wrote back that same day (green)." />
                     </div>
                     <div style={{ height: 200 }}>
                         <ResponsiveContainer width="100%" height="100%">

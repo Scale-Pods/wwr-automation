@@ -291,7 +291,7 @@ export default function SentEmailsPage() {
                             <SelectTrigger style={{ width: "100%", height: 36, fontSize: 12 }}><SelectValue placeholder="Email Step" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Steps</SelectItem>
-                                {[1, 2, 3, 4, 5].map(n => <SelectItem key={n} value={String(n)}>Email {n}</SelectItem>)}
+                                {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <SelectItem key={n} value={String(n)}>Email {n}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>

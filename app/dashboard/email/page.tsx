@@ -1,21 +1,39 @@
 "use client";
 
-import { Mail, Send, Inbox, AlertCircle, CheckCircle2, MessageSquareText } from "lucide-react";
+import { Mail, Send, Inbox, AlertCircle, CheckCircle2, MessageSquareText, Flame, Info } from "lucide-react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import {
+    Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
-import { subDays } from "date-fns";
-import { useData } from "@/context/DataContext";
+import { subDays, startOfDay, endOfDay } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { coerceTimestamp, hasEmailReply } from "@/lib/outreach-types";
-import type { OutreachLead } from "@/lib/outreach-types";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
-import { matchesBoard, type EmailBoardKey } from "@/lib/email-board";
+import { type EmailBoardKey } from "@/lib/email-board";
+import type { EmailMetrics } from "@/app/api/metrics/email/route";
 
-function MetricTile({ title, subtitle, value, accentColor, icon, onClick }: {
+function InfoTooltip({ text }: { text: string }) {
+    return (
+        <TooltipProvider>
+            <UITooltip>
+                <TooltipTrigger asChild>
+                    <div style={{ display: "inline-flex", cursor: "help" }}>
+                        <Info style={{ width: 13, height: 13, color: "var(--label-tertiary)" }} />
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent style={{ maxWidth: 240, padding: "8px 10px", fontSize: 11, lineHeight: 1.5, background: "var(--bg-layer1)", color: "var(--label-primary)", border: "1px solid var(--hairline)" }}>
+                    {text}
+                </TooltipContent>
+            </UITooltip>
+        </TooltipProvider>
+    );
+}
+
+function MetricTile({ title, subtitle, value, accentColor, icon, onClick, info }: {
     title: string; subtitle?: string; value: string | number;
-    accentColor: string; icon: React.ReactNode; onClick?: () => void;
+    accentColor: string; icon: React.ReactNode; onClick?: () => void; info?: string;
 }) {
     return (
         <div className="metric-tile" style={{ "--tile-accent": accentColor, cursor: onClick ? "pointer" : "default" } as any}
@@ -24,7 +42,10 @@ function MetricTile({ title, subtitle, value, accentColor, icon, onClick }: {
             onMouseLeave={e => { if (onClick) e.currentTarget.style.transform = ""; }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                 <div style={{ flex: 1 }}>
-                    <div className="tile-label">{title}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div className="tile-label">{title}</div>
+                        {info && <InfoTooltip text={info} />}
+                    </div>
                     <div className="tile-value tabular-nums" style={{ fontSize: 30 }}>{value}</div>
                     {subtitle && <div className="tile-trend neutral">{subtitle}</div>}
                 </div>
@@ -64,44 +85,37 @@ function BreakdownCard({ title, count, total, accentColor }: { title: string; co
 export default function EmailDashboardPage() {
     const router = useRouter();
     const [dateSubtitle, setDateSubtitle] = useState("Last 7 days");
-    const { leads: allLeads, loadingLeads } = useData();
     const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
     const [board, setBoard] = useState<EmailBoardKey>("all");
+    const [metrics, setMetrics] = useState<EmailMetrics | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    const data = useMemo(() => {
-        const empty = { totalEmails: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, perStep: [0, 0, 0, 0, 0, 0, 0, 0] };
-        if (loadingLeads) return empty;
+    // All totals (sent, replies, sentiment, EOI leads) are computed server-side
+    // in /api/metrics/email — the client only displays them.
+    const fetchMetrics = useCallback(async (from: Date, to: Date, b: EmailBoardKey) => {
+        setLoading(true);
+        try {
+            const fromISO = startOfDay(from).toISOString();
+            const toISO = endOfDay(to).toISOString();
+            const res = await fetch(`/api/metrics/email?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}&board=${encodeURIComponent(b)}`);
+            setMetrics(res.ok ? await res.json() : null);
+        } catch (err) {
+            console.error('[email dashboard fetch]', err);
+            setMetrics(null);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-        const fromD = dateRange?.from ? new Date(dateRange.from) : null;
-        const toD = dateRange?.to ? new Date(dateRange.to) : fromD;
-        if (fromD) fromD.setHours(0, 0, 0, 0);
-        if (toD) toD.setHours(23, 59, 59, 999);
-        const inRange = (d: Date | null) => { if (!fromD || !toD) return true; if (!d) return false; return d >= fromD && d <= toD; };
+    useEffect(() => {
+        if (!dateRange?.from) return;
+        fetchMetrics(dateRange.from, dateRange.to || dateRange.from, board);
+    }, [dateRange, board, fetchMetrics]);
 
-        let totalEmails = 0, replyCount = 0, posSentiment = 0, negSentiment = 0;
-        const perStep = [0, 0, 0, 0, 0, 0, 0, 0];
-
-        (allLeads as OutreachLead[]).forEach(lead => {
-            if (!matchesBoard(lead, board)) return;
-            lead.email_slots.forEach(s => {
-                // email_slots only contains slots where email_N itself has content
-                // (see buildEmailSlots) — s.raw is always present here.
-                const ts = coerceTimestamp(s.sent_at) || coerceTimestamp(s.obj?.timestamp) || lead.created_at;
-                if (inRange(ts ? new Date(ts) : null)) {
-                    totalEmails++;
-                    if (s.n >= 1 && s.n <= 8) perStep[s.n - 1]++;
-                }
-            });
-            if (hasEmailReply(lead)) replyCount++;
-            const sent = String(lead.email_sentiment || "").toLowerCase();
-            if (sent.includes("positive")) posSentiment++;
-            if (sent.includes("negative")) negSentiment++;
-        });
-
-        return { totalEmails, totalReplies: replyCount, totalPosSentiment: posSentiment, totalNegSentiment: negSentiment, perStep };
-    }, [dateRange, allLeads, loadingLeads, board]);
-
-    const replyRate = data.totalEmails > 0 ? ((data.totalReplies / data.totalEmails) * 100).toFixed(1) : "0";
+    const data = metrics ?? { totalEmailsSent: 0, totalReplies: 0, totalPosSentiment: 0, totalNegSentiment: 0, totalEoiLeads: 0, totalLeadsEmailed: 0, perStep: [0, 0, 0, 0, 0, 0, 0, 0], dailyTrend: [] };
+    const totalEmails = data.totalEmailsSent;
+    const replyRate = totalEmails > 0 ? ((data.totalReplies / totalEmails) * 100).toFixed(1) : "0";
+    const loadingLeads = loading;
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40, position: "relative", minHeight: 500 }}>
@@ -119,20 +133,24 @@ export default function EmailDashboardPage() {
             </div>
 
             <div className="metric-grid-sm">
-                <MetricTile title="Total Emails" subtitle={dateSubtitle} value={data.totalEmails.toLocaleString()} accentColor="var(--indigo)" icon={<Mail size={17} />} onClick={() => router.push("/dashboard/email/sent")} />
-                <MetricTile title="Total Replies" subtitle={`${replyRate}% reply rate`} value={data.totalReplies.toLocaleString()} accentColor="var(--teal)" icon={<Inbox size={17} />} onClick={() => router.push("/dashboard/email/received")} />
-                <MetricTile title="Positive Sentiment" subtitle="from email_sentiment" value={data.totalPosSentiment.toLocaleString()} accentColor="var(--green)" icon={<CheckCircle2 size={17} />} />
-                <MetricTile title="Negative Sentiment" subtitle="from email_sentiment" value={data.totalNegSentiment.toLocaleString()} accentColor="var(--red)" icon={<AlertCircle size={17} />} />
-                <MetricTile title="Reply Rate" subtitle={dateSubtitle} value={`${replyRate}%`} accentColor="var(--orange)" icon={<MessageSquareText size={17} />} />
+                <MetricTile title="Total Emails" subtitle={dateSubtitle} value={totalEmails.toLocaleString()} accentColor="var(--indigo)" icon={<Mail size={17} />} onClick={() => router.push("/dashboard/email/sent")} info="Every outreach email we actually sent in this date range, including every follow-up step." />
+                <MetricTile title="Total Replies" subtitle={`${replyRate}% reply rate`} value={data.totalReplies.toLocaleString()} accentColor="var(--teal)" icon={<Inbox size={17} />} onClick={() => router.push("/dashboard/email/received")} info="How many leads actually wrote back to one of our emails." />
+                <MetricTile title="Positive Sentiment" subtitle="Leads who sounded interested" value={data.totalPosSentiment.toLocaleString()} accentColor="var(--green)" icon={<CheckCircle2 size={17} />} info="Leads whose reply our AI read as positive — interested, engaged, or asking for more info." />
+                <MetricTile title="Negative Sentiment" subtitle="Leads who sounded uninterested" value={data.totalNegSentiment.toLocaleString()} accentColor="var(--red)" icon={<AlertCircle size={17} />} info="Leads whose reply our AI read as negative — not interested, or asking to stop." />
+                <MetricTile title="Reply Rate" subtitle={dateSubtitle} value={`${replyRate}%`} accentColor="var(--orange)" icon={<MessageSquareText size={17} />} info="Total Replies divided by Total Emails — the share of emails that got a reply." />
+                <MetricTile title="EOI Leads" subtitle="Expression of Interest" value={data.totalEoiLeads.toLocaleString()} accentColor="var(--purple)" icon={<Flame size={17} />} info="Leads who clearly said they're interested in a property — a stronger signal than general positive sentiment." />
             </div>
 
             <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                    <h2 style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.022em", color: "var(--label-primary)" }}>Per-Step Performance</h2>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "space-between", marginBottom: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <h2 style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.022em", color: "var(--label-primary)" }}>Per-Step Performance</h2>
+                        <InfoTooltip text="Our outreach sends up to 8 follow-up emails per lead. This shows how many of each step (Email 1, Email 2, …) actually went out, and what share of the total that is." />
+                    </div>
                 </div>
                 <div className="metric-grid-sm">
                     {["Email 1", "Email 2", "Email 3", "Email 4", "Email 5", "Email 6", "Email 7", "Email 8"].map((name, i) => (
-                        <BreakdownCard key={name} title={name} count={data.perStep[i]} total={data.totalEmails} accentColor="var(--blue)" />
+                        <BreakdownCard key={name} title={name} count={data.perStep[i]} total={totalEmails} accentColor="var(--blue)" />
                     ))}
                 </div>
             </div>

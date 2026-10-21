@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { OUTREACH_TABLE, VAPI_CALL_LOGS, isReplyTrackPositive, hasEmailReply } from '@/lib/outreach-types';
+import { OUTREACH_TABLE, VAPI_CALL_LOGS, isReplyTrackPositive, hasEmailReply, isEmailSlotSent } from '@/lib/outreach-types';
 import { telephonyCost } from '@/lib/telephony-cost';
 
 export const dynamic = 'force-dynamic';
@@ -94,7 +94,7 @@ export async function GET(req: Request) {
             if (hasWa) totalWaReachouts++;
             if (isReplyTrackPositive(r.whatsapp_reply_track)) totalWaReplies++;
 
-            for (let n = 1; n <= 8; n++) if (r[`email_${n}`]) totalEmailsSent++;
+            for (let n = 1; n <= 8; n++) if (r[`email_${n}`] && isEmailSlotSent(r[`email_${n}_status`])) totalEmailsSent++;
             if (hasEmailReply(r)) totalEmailReplies++;
 
             const dt = r.created_at;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Phone, Clock, TrendingUp, Timer, RefreshCw, PhoneMissed, PhoneOff } from "lucide-react";
+import { Phone, Clock, TrendingUp, Timer, RefreshCw, PhoneMissed, PhoneOff, Info } from "lucide-react";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useEffect, useState } from "react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -8,20 +8,43 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, AreaChart, Area,
 } from "recharts";
+import {
+    Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, subDays } from "date-fns";
 import { formatDuration } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
+function InfoTooltip({ text }: { text: string }) {
+    return (
+        <TooltipProvider>
+            <UITooltip>
+                <TooltipTrigger asChild>
+                    <div style={{ display: "inline-flex", cursor: "help" }}>
+                        <Info style={{ width: 13, height: 13, color: "var(--label-tertiary)" }} />
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent style={{ maxWidth: 240, padding: "8px 10px", fontSize: 11, lineHeight: 1.5, background: "var(--bg-layer1)", color: "var(--label-primary)", border: "1px solid var(--hairline)" }}>
+                    {text}
+                </TooltipContent>
+            </UITooltip>
+        </TooltipProvider>
+    );
+}
+
 /* ── Apple Metric Tile ── */
-function MetricTile({ title, value, accentColor, icon }: {
-    title: string; value: string; accentColor: string; icon: React.ReactNode;
+function MetricTile({ title, value, accentColor, icon, info }: {
+    title: string; value: string; accentColor: string; icon: React.ReactNode; info?: string;
 }) {
     return (
         <div className="metric-tile" style={{ '--tile-accent': accentColor } as any}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div style={{ flex: 1 }}>
-                    <div className="tile-label">{title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div className="tile-label">{title}</div>
+                        {info && <InfoTooltip text={info} />}
+                    </div>
                     <div className="tile-value tabular-nums" style={{ fontSize: 28 }}>{value}</div>
                 </div>
                 <div style={{
@@ -153,24 +176,28 @@ export default function VoiceDashboardPage() {
                     value={`${(m?.totalCalls ?? 0).toLocaleString()} calls`}
                     accentColor="var(--blue)"
                     icon={<Phone size={17} />}
+                    info="Every call attempt in this date range — both calls that connected and ones where the lead never picked up."
                 />
                 <MetricTile
                     title="Total Duration"
                     value={formatDuration(m?.totalDuration ?? 0)}
                     accentColor="var(--green)"
                     icon={<Clock size={17} />}
+                    info="The combined talk time of every call in this date range, added together."
                 />
                 <MetricTile
                     title="Avg Duration"
                     value={`${Math.round(m?.avgDuration ?? 0)}s`}
                     accentColor="var(--orange)"
                     icon={<Timer size={17} />}
+                    info="Total Duration divided by Total Calls — how long a typical call lasts."
                 />
                 <MetricTile
                     title="No Answer"
                     value={`${(m?.noAnswerCalls ?? 0).toLocaleString()} calls`}
                     accentColor="var(--red)"
                     icon={<PhoneMissed size={17} />}
+                    info="Calls where the lead never picked up, so no conversation happened."
                 />
             </div>
 
@@ -188,6 +215,7 @@ export default function VoiceDashboardPage() {
                     <h3 style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.022em', color: 'var(--label-primary)' }}>
                         Calls by Route
                     </h3>
+                    <InfoTooltip text="Calls grouped by the type of lead: Commercial, Business, or Residential. Connected = reached a real conversation; No Answer = never picked up; Positive Sentiment = the lead reacted well on the call." />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {(Object.keys(ROUTE_META) as Array<keyof typeof ROUTE_META>).map(route => {
@@ -236,6 +264,7 @@ export default function VoiceDashboardPage() {
                         <h3 style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.022em', color: 'var(--label-primary)' }}>
                             Daily Call Volume
                         </h3>
+                        <InfoTooltip text="How many calls were made each day in the selected date range." />
                     </div>
                     <div style={{ height: 220 }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -264,6 +293,7 @@ export default function VoiceDashboardPage() {
                         <h3 style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.022em', color: 'var(--label-primary)' }}>
                             Hourly Distribution
                         </h3>
+                        <InfoTooltip text="What time of day calls tend to happen, grouped into 3-hour blocks." />
                     </div>
                     <div style={{ height: 220 }}>
                         <ResponsiveContainer width="100%" height="100%">
