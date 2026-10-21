@@ -10,13 +10,13 @@ import {
 } from "recharts";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
-import { isReplyTrackPositive, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, earliestWaSentDate } from "@/lib/outreach-types";
+import { isReplyTrackPositive, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, lastWaActivityDate } from "@/lib/outreach-types";
 
 function waActivity(lead: any) {
     const conv = parseJsonArray(lead.whatsapp_conversation);
     const sent = waMessagesSent(lead);
     const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
-    const lastDate = earliestWaSentDate(lead);
+    const lastDate = lastWaActivityDate(lead);
     return { sent, replied, lastDate };
 }
 

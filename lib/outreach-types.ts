@@ -277,6 +277,39 @@ export function earliestWaSentDate(row: any): string | null {
     return coerceTimestamp(row?.last_activity) || row?.created_at || null;
 }
 
+/**
+ * The most recent WhatsApp activity on this lead, as an ISO string — the
+ * timestamp to sort/filter/display "Last Contacted" by (mirrors how real
+ * WhatsApp orders chats: most recent message first, whether sent or replied).
+ * Takes the max across: every sent wa_1..wa_8 slot's wa_N_sent_at, every
+ * message in whatsapp_conversation (inbound or outbound), and last_activity /
+ * created_at as a final fallback. Never use earliestWaSentDate for this —
+ * that intentionally returns the MINIMUM (first-contact) timestamp.
+ */
+export function lastWaActivityDate(row: any): string | null {
+    const times: number[] = [];
+
+    for (const slot of waSentSlots(row)) {
+        const iso = coerceTimestamp(slot.sent_at);
+        if (iso) {
+            const ms = new Date(iso).getTime();
+            if (!isNaN(ms)) times.push(ms);
+        }
+    }
+
+    for (const msg of parseJsonArray(row?.whatsapp_conversation)) {
+        const iso = coerceTimestamp(msg?.date || msg?.timestamp || msg?.created_at || msg?.sent_at)
+            || parseQatarDateTime(msg?.qatar_timestamp);
+        if (iso) {
+            const ms = new Date(iso).getTime();
+            if (!isNaN(ms)) times.push(ms);
+        }
+    }
+
+    if (times.length > 0) return new Date(Math.max(...times)).toISOString();
+    return coerceTimestamp(row?.last_activity) || row?.created_at || null;
+}
+
 export function parseJsonObject(raw: any): Record<string, any> | null {
     if (!raw) return null;
     let parsed = raw;

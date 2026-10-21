@@ -10,7 +10,7 @@ import { Search, Filter, Users, Send, MessageSquare, RefreshCw, ChevronLeft, Che
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays, startOfDay, endOfDay } from "date-fns";
-import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, earliestWaSentDate } from "@/lib/outreach-types";
+import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, lastWaActivityDate } from "@/lib/outreach-types";
 
 // ── one lead's WhatsApp signals from outreach_table ──────────────────────────
 function waSignals(lead: any) {
@@ -27,7 +27,7 @@ function waSignals(lead: any) {
     const botCount = waMessagesSent(lead);
     const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
     const failedCount = slotMsgs.filter(s => String(s.status || "").toLowerCase().includes("fail")).length;
-    const lastDate = earliestWaSentDate(lead);
+    const lastDate = lastWaActivityDate(lead);
     const msgCount = conv.length || slotMsgs.length;
     return { conv, slotMsgs, botCount, replied, failedCount, lastDate, msgCount };
 }
@@ -86,8 +86,8 @@ export default function WhatsappChatPage() {
         initialProcessed.current = true;
     }, [initialSelectedId]);
 
-    const [pendingFilters, setPendingFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; pfLead: boolean; }>({ replyStatus: [], messageStatus: [], pfLead: false });
-    const [activeFilters, setActiveFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; pfLead: boolean; }>({ replyStatus: [], messageStatus: [], pfLead: false });
+    const [pendingFilters, setPendingFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; pfLead: boolean; waSlots: number[]; }>({ replyStatus: [], messageStatus: [], pfLead: false, waSlots: [] });
+    const [activeFilters, setActiveFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; pfLead: boolean; waSlots: number[]; }>({ replyStatus: [], messageStatus: [], pfLead: false, waSlots: [] });
 
     const leadsInRange = useMemo(() => {
         const from = dateRange?.from ? startOfDay(new Date(dateRange.from)).getTime() : null;
@@ -121,7 +121,10 @@ export default function WhatsappChatPage() {
 
             const matchesPfLead = !activeFilters.pfLead || isPropertyFinderLead(lead);
 
-            return matchesReplyStatus && matchesMessageStatus && matchesPfLead;
+            const matchesWaSlots = activeFilters.waSlots.length === 0 ||
+                activeFilters.waSlots.every(n => s.slotMsgs.some(m => m.n === n && String(m.status || "").toLowerCase().includes("sent")));
+
+            return matchesReplyStatus && matchesMessageStatus && matchesPfLead && matchesWaSlots;
         }).sort((a, b) => {
             const da = waSignals(a).lastDate;
             const db = waSignals(b).lastDate;
@@ -146,7 +149,7 @@ export default function WhatsappChatPage() {
 
     const handleApplyFilters = () => setActiveFilters(pendingFilters);
     const handleResetFilters = () => {
-        const reset = { replyStatus: [], messageStatus: [], pfLead: false };
+        const reset = { replyStatus: [], messageStatus: [], pfLead: false, waSlots: [] };
         setPendingFilters(reset);
         setActiveFilters(reset);
     };
@@ -158,6 +161,9 @@ export default function WhatsappChatPage() {
     };
     const togglePfLeadFilter = () => {
         setPendingFilters(prev => ({ ...prev, pfLead: !prev.pfLead }));
+    };
+    const toggleWaSlotFilter = (n: number) => {
+        setPendingFilters(prev => ({ ...prev, waSlots: prev.waSlots.includes(n) ? prev.waSlots.filter(v => v !== n) : [...prev.waSlots, n] }));
     };
 
     const paginatedLeads = useMemo(() => {
@@ -214,9 +220,9 @@ export default function WhatsappChatPage() {
                     style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--hairline)", background: "var(--fill-tertiary)", fontSize: 13, fontWeight: 500, color: "var(--label-secondary)", cursor: "pointer" }}>
                     <Filter style={{ width: 13, height: 13 }} />
                     {showFilters ? "Hide" : "Show"} Filters
-                    {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead) && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)", marginLeft: 2 }} />}
+                    {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead || activeFilters.waSlots.length > 0) && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)", marginLeft: 2 }} />}
                 </button>
-                {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead) && (
+                {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead || activeFilters.waSlots.length > 0) && (
                     <button onClick={handleResetFilters} style={{ fontSize: 11, fontWeight: 700, color: "var(--blue)", background: "none", border: "none", cursor: "pointer" }}>RESET ALL</button>
                 )}
             </div>
@@ -244,6 +250,12 @@ export default function WhatsappChatPage() {
 
                         <FilterSection title="Source">
                             <FilterOption label="PF Lead" checked={pendingFilters.pfLead} onCheckedChange={togglePfLeadFilter} />
+                        </FilterSection>
+
+                        <FilterSection title="WhatsApp Step Sent">
+                            {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+                                <FilterOption key={n} label={`WA ${n} Sent`} checked={pendingFilters.waSlots.includes(n)} onCheckedChange={() => toggleWaSlotFilter(n)} />
+                            ))}
                         </FilterSection>
 
                         <button onClick={handleApplyFilters}
