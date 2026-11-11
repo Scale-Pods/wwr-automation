@@ -284,6 +284,7 @@ export default function MasterDashboard() {
                     trendDir="neutral"
                     accentColor="var(--orange)"
                     icon={<Phone size={17} />}
+                    onClick={() => router.push('/dashboard/voice/logs')}
                 />
             </div>
 
