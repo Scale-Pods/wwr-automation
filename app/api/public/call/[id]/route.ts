@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { OUTREACH_TABLE, VAPI_CALL_LOGS } from '@/lib/outreach-types';
 import { parseCallTranscript, visibleTurns } from '@/lib/call-transcript';
+import { slotForCall } from '@/lib/call-slots';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +50,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
     try {
         // 1. Resolve the lead.
-        const leadCols = enc('lead_id,crm_id,full_name,first_name,last_name,phone,call_1_sentiment,call_1_note,call_2_sentiment,call_2_note,call_3_sentiment,call_3_note,call_4_sentiment,call_4_note,call_5_sentiment,call_5_note,call_6_sentiment,call_6_note,call_7_sentiment,call_7_note,call_8_sentiment,call_8_note');
+        const leadCols = enc('lead_id,crm_id,full_name,first_name,last_name,phone,' + [1, 2, 3, 4, 5, 6, 7, 8].map(n => `call_${n}_date,call_${n}_sentiment,call_${n}_note`).join(','));
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
         let leads = await tryFetch(`${base}/${OUTREACH_TABLE}?select=${leadCols}&crm_id=eq.${enc(rawId)}&limit=5`);
         if (!leads.length && isUuid) {
@@ -85,16 +86,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // call_1..8_sentiment+note on the lead row are assigned in chronological
         // order (n8n fills the first empty slot 1→8 as calls happen), so the
         // oldest call maps to slot 1, next to slot 2, etc.
-        const slotFields = [
-            { sentiment: lead.call_1_sentiment || null, note: lead.call_1_note || null },
-            { sentiment: lead.call_2_sentiment || null, note: lead.call_2_note || null },
-            { sentiment: lead.call_3_sentiment || null, note: lead.call_3_note || null },
-            { sentiment: lead.call_4_sentiment || null, note: lead.call_4_note || null },
-            { sentiment: lead.call_5_sentiment || null, note: lead.call_5_note || null },
-            { sentiment: lead.call_6_sentiment || null, note: lead.call_6_note || null },
-            { sentiment: lead.call_7_sentiment || null, note: lead.call_7_note || null },
-            { sentiment: lead.call_8_sentiment || null, note: lead.call_8_note || null },
-        ];
+        // Slots are matched to calls by DATE (see lib/call-slots.ts). Matching by
+        // chronological index was wrong whenever an attempt (e.g. a no-answer)
+        // has a slot but no vapi_call_logs row.
 
         // Slot numbers (1-8) must be assigned across ALL attempts in chronological
         // order BEFORE dropping empty ones — a no-transcript call still consumes
@@ -113,7 +107,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
                 };
             })
             .sort((a, b) => (a.startedAt ? new Date(a.startedAt).getTime() : 0) - (b.startedAt ? new Date(b.startedAt).getTime() : 0))
-            .map((c, i) => ({ ...c, callSlot: i + 1, sentiment: slotFields[i]?.sentiment ?? null, note: slotFields[i]?.note ?? null }))
+            .map((c, i) => {
+                const s = slotForCall(lead, c.startedAt);
+                return { ...c, callSlot: s ? s.slot : i + 1, sentiment: s?.sentiment ?? null, note: s?.note ?? null };
+            })
             // Unanswered / empty attempts add nothing to a shared view — drop after
             // slot assignment, not before.
             .filter(c => c.transcript.length > 0 || c.recordingUrl)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { OUTREACH_TABLE, VAPI_CALL_LOGS } from '@/lib/outreach-types';
 import { countryOf, dialCodeOf, telephonyCost } from '@/lib/telephony-cost';
+import { slotForCall } from '@/lib/call-slots';
 
 export const dynamic = 'force-dynamic';
 
@@ -184,18 +185,9 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
         let sentiment: string | null = null;
         let note: string | null = null;
         if (lead) {
-            const slots = [
-                { sentiment: lead.call_1_sentiment, note: lead.call_1_note },
-                { sentiment: lead.call_2_sentiment, note: lead.call_2_note },
-                { sentiment: lead.call_3_sentiment, note: lead.call_3_note },
-                { sentiment: lead.call_4_sentiment, note: lead.call_4_note },
-                { sentiment: lead.call_5_sentiment, note: lead.call_5_note },
-                { sentiment: lead.call_6_sentiment, note: lead.call_6_note },
-                { sentiment: lead.call_7_sentiment, note: lead.call_7_note },
-                { sentiment: lead.call_8_sentiment, note: lead.call_8_note },
-            ];
-            const chosen = slots.find(s => String(s.sentiment || '').toLowerCase().includes('positive'))
-                || slots.find(s => s.sentiment);
+            // Each call shows ITS OWN slot (matched by call date), not one
+            // lead-wide slot repeated on every call.
+            const chosen = slotForCall(lead, d.started_at);
             sentiment = chosen?.sentiment || null;
             note = chosen?.note || null;
         }
