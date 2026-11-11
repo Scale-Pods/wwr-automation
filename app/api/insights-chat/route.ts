@@ -56,6 +56,55 @@ function stripMarkdown(input: string): string {
         .trim();
 }
 
+/**
+ * Newer n8n chat versions reply with JSON frames (one JSON object per line):
+ *   {"type":"begin"} {"type":"item","content":"..."} {"type":"end"}
+ * (and {"type":"error","content":"..."}). Older versions reply with a single
+ * JSON object { output }. Handle both, plus plain text.
+ */
+function extractReply(raw: string): string {
+    const text = (raw || '').trim();
+    if (!text) return '';
+
+    const fromObject = (o: any): string =>
+        typeof o === 'string'
+            ? o
+            : o?.output ?? o?.text ?? o?.reply ?? o?.message ?? '';
+
+    // Single JSON document
+    try {
+        const json = JSON.parse(text);
+        if (json && typeof json === 'object' && 'type' in json && !('output' in json)) {
+            if (json.type === 'error') throw new Error(String(json.content || 'Assistant error'));
+            return typeof json.content === 'string' ? json.content : '';
+        }
+        return fromObject(json);
+    } catch (e) {
+        if (e instanceof Error && e.message !== 'Unexpected end of JSON input' && !(e instanceof SyntaxError)) {
+            throw e;
+        }
+    }
+
+    // Newline-delimited JSON frames
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    let out = '';
+    let sawFrame = false;
+    for (const line of lines) {
+        let frame: any;
+        try {
+            frame = JSON.parse(line);
+        } catch {
+            continue;
+        }
+        if (!frame || typeof frame !== 'object') continue;
+        sawFrame = true;
+        if (frame.type === 'error') throw new Error(String(frame.content || 'Assistant error'));
+        if (frame.type === 'item' && typeof frame.content === 'string') out += frame.content;
+        else if (frame.type === undefined) out += fromObject(frame);
+    }
+    return sawFrame ? out : text;
+}
+
 export async function POST(req: Request) {
     if (!WEBHOOK_URL) {
         return NextResponse.json(
@@ -100,14 +149,7 @@ export async function POST(req: Request) {
             );
         }
 
-        // n8n replies with JSON { output: "..." } but be defensive.
-        let reply = '';
-        try {
-            const json = JSON.parse(text);
-            reply = json.output ?? json.text ?? json.reply ?? json.message ?? '';
-        } catch {
-            reply = text;
-        }
+        const reply = extractReply(text);
 
         return NextResponse.json({
             reply: stripMarkdown(reply) || 'No response from the assistant.',
