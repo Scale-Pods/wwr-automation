@@ -32,12 +32,13 @@ function StyledInput({ id, name, type, placeholder, required }: {
         <div style={{ position: 'relative' }}>
             <div style={{
                 position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
-                color: 'rgba(255,255,255,0.30)', pointerEvents: 'none', display: 'flex',
+                color: '#8E8E93', pointerEvents: 'none', display: 'flex',
             }}>
                 {type === 'email' ? <Mail size={16} /> : <Lock size={16} />}
             </div>
             <input
                 id={id}
+                className="auth-input"
                 name={name}
                 type={isPassword && visible ? 'text' : type}
                 placeholder={placeholder}
@@ -67,10 +68,10 @@ function StyledInput({ id, name, type, placeholder, required }: {
                     style={{
                         position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
                         background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-                        display: 'flex', color: 'rgba(255,255,255,0.40)',
+                        display: 'flex', color: '#8E8E93',
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.80)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#0A84FF')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#8E8E93')}
                 >
                     {visible ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>

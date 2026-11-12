@@ -1315,3 +1315,13 @@
         padding-top: 72px !important;
     }
 }
+
+/* Keep auth inputs dark when the browser autofills them */
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus {
+    -webkit-text-fill-color: rgba(255, 255, 255, 0.88);
+    caret-color: rgba(255, 255, 255, 0.88);
+    -webkit-box-shadow: 0 0 0 1000px #2a2a2d inset;
+    transition: background-color 9999s ease-in-out 0s;
+}
