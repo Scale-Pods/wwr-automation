@@ -2,7 +2,7 @@
 
 import { useState, useActionState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { login, forgotPassword } from '@/app/actions/auth';
 
 type AuthMode = 'login' | 'forgot';
@@ -26,6 +26,8 @@ function StyledInput({ id, name, type, placeholder, required }: {
     id: string; name: string; type: string; placeholder: string; required?: boolean;
 }) {
     const [focused, setFocused] = useState(false);
+    const [visible, setVisible] = useState(false);
+    const isPassword = type === 'password';
     return (
         <div style={{ position: 'relative' }}>
             <div style={{
@@ -37,7 +39,7 @@ function StyledInput({ id, name, type, placeholder, required }: {
             <input
                 id={id}
                 name={name}
-                type={type}
+                type={isPassword && visible ? 'text' : type}
                 placeholder={placeholder}
                 required={required}
                 onFocus={e => {
@@ -52,9 +54,27 @@ function StyledInput({ id, name, type, placeholder, required }: {
                 }}
                 style={{
                     ...inputStyle,
+                    paddingRight: isPassword ? 42 : 14,
                     borderColor: focused ? '#0A84FF' : 'rgba(255,255,255,0.10)',
                 }}
             />
+            {isPassword && (
+                <button
+                    type="button"
+                    onClick={() => setVisible(v => !v)}
+                    aria-label={visible ? 'Hide password' : 'Show password'}
+                    title={visible ? 'Hide password' : 'Show password'}
+                    style={{
+                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                        display: 'flex', color: 'rgba(255,255,255,0.40)',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.80)')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
+                >
+                    {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+            )}
         </div>
     );
 }
