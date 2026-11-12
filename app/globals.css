@@ -1339,3 +1339,35 @@
     border-color: #0A84FF !important;
     box-shadow: 0 0 0 1000px #2a2a2d inset, 0 0 0 3px rgba(10, 132, 255, 0.22) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Global responsive safety net
+   ═══════════════════════════════════════════════════════════════ */
+html, body { max-width: 100%; overflow-x: hidden; }
+img, video, canvas, svg { max-width: 100%; }
+.dashboard-main > * { min-width: 0; }
+.dashboard-main h1, .dashboard-main h2, .dashboard-main h3 { overflow-wrap: anywhere; }
+
+/* Three-up filter rows (Sent / Received emails): 1 col phone, 2 col tablet, 3 col desktop */
+.filter-grid-3 { display: grid; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 560px) { .filter-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .filter-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Dialogs / popups never exceed the viewport and scroll internally when tall */
+[role="dialog"] {
+    max-width: calc(100vw - 16px);
+    max-height: 92dvh;
+}
+
+@media (max-width: 640px) {
+    /* Fixed-width form controls shrink to fit */
+    button[role="combobox"], .dashboard-main input, .dashboard-main select { max-width: 100%; }
+    /* Tighter padding for cards and dialogs on phones */
+    [role="dialog"].apple-dialog { padding: 16px; border-radius: 20px; }
+    .dashboard-main h1 { font-size: 22px !important; }
+    /* Table cells: a bit denser so more fits before horizontal scroll */
+    .dashboard-main table th, .dashboard-main table td { padding-left: 10px; padding-right: 10px; }
+    /* Popovers (date picker etc.) stay on-screen */
+    [data-radix-popper-content-wrapper] { max-width: 100vw; }
+    .rdp { max-width: calc(100vw - 32px); overflow-x: auto; }
+}

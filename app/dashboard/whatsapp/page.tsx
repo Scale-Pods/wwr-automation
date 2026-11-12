@@ -272,7 +272,7 @@ export default function WhatsAppDashboardPage() {
                         </ResponsiveContainer>
                     </div>
                     {/* Legend */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8, marginTop: 12 }}>
                         {donutData.map(item => (
                             <div key={item.name} style={{
                                 borderRadius: 10, padding: '10px 8px', textAlign: 'center',

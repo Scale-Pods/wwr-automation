@@ -259,7 +259,7 @@ export default function SentEmailsPage() {
                 <DateRangePicker className="w-full md:w-[260px]" onUpdate={values => setDateRange(values.range)} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+            <div className="filter-grid-3" style={{ gap: 12 }}>
                 <MetricTile label="Emails Sent" value={loading ? "…" : metrics.total.toLocaleString()} color="var(--blue)" icon={<Mail style={{ width: 15, height: 15 }} />} />
                 <MetricTile label="Positive Sentiment" value={loading ? "…" : metrics.pos.toLocaleString()} color="var(--green)" icon={<Reply style={{ width: 15, height: 15 }} />} />
                 <MetricTile label="Negative Sentiment" value={loading ? "…" : metrics.neg.toLocaleString()} color="var(--orange)" icon={<Filter style={{ width: 15, height: 15 }} />} />

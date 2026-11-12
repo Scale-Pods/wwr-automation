@@ -226,7 +226,7 @@ export default function ReceivedEmailsPage() {
                 <DateRangePicker onUpdate={values => setDateRange(values.range)} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+            <div className="filter-grid-3" style={{ gap: 12 }}>
                 <MetricTile label="Conversations" value={loading ? "…" : metrics.total.toLocaleString()} color="var(--green)" icon={<Mail style={{ width: 15, height: 15 }} />} />
                 <MetricTile label="Positive Sentiment" value={loading ? "…" : metrics.pos.toLocaleString()} color="var(--green)" icon={<ArrowUpRight style={{ width: 15, height: 15 }} />} />
                 <MetricTile label="Negative Sentiment" value={loading ? "…" : metrics.neg.toLocaleString()} color="var(--orange)" icon={<ArrowDownLeft style={{ width: 15, height: 15 }} />} />
