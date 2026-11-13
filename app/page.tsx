@@ -28,7 +28,7 @@ export default function LandingPage() {
 
     return (
         <div
-            className="min-h-screen overflow-hidden"
+            className="min-h-screen overflow-x-hidden"
             style={{
                 backgroundColor: '#111111',
             }}
@@ -43,23 +43,23 @@ export default function LandingPage() {
                     borderBottom: '1px solid rgba(255,255,255,0.06)',
                 }}
             >
-                <div className="max-w-6xl mx-auto px-6 h-[60px] flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="relative flex items-center h-[44px] w-[180px]">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[60px] flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="relative flex items-center h-[36px] w-[110px] sm:h-[44px] sm:w-[180px] shrink-0">
                             <Image src="/logo.png" alt="World Wide Real Estate" fill className="object-contain object-left" priority />
                         </div>
-                        <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)' }} />
-                        <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.40)', letterSpacing: '-0.01em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <div className="hidden sm:block" style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)' }} />
+                        <span className="hidden min-[420px]:inline-flex" style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.40)', letterSpacing: '-0.01em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             Powered by{' '}
                             <span style={{ fontWeight: 700, color: '#ffffff', letterSpacing: '-0.02em', fontSize: 13 }}>ScalePods</span>
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                         <button
                             onClick={() => document.getElementById('login-form')?.scrollIntoView({ behavior: 'smooth' })}
                             style={{
-                                padding: '8px 16px',
+                                padding: '8px 10px',
                                 borderRadius: 10,
                                 fontSize: 14,
                                 fontWeight: 500,
@@ -78,7 +78,7 @@ export default function LandingPage() {
                         <button
                             onClick={() => document.getElementById('login-form')?.scrollIntoView({ behavior: 'smooth' })}
                             style={{
-                                padding: '9px 20px',
+                                padding: '8px 14px',
                                 borderRadius: 10,
                                 fontSize: 14,
                                 fontWeight: 600,
@@ -102,14 +102,14 @@ export default function LandingPage() {
             </header>
 
             {/* ── Hero ── */}
-            <section className="relative min-h-screen flex flex-col justify-center px-6 pt-16">
-                <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+            <section className="relative lg:min-h-screen flex flex-col justify-center px-4 sm:px-6 pt-24 pb-12 lg:pt-16 lg:pb-0">
+                <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-20 items-center">
                     {/* Left: Content */}
                     <div className="flex flex-col justify-center text-center lg:text-left">
                         {/* Pill */}
-                        <div className="mb-6">
+                        <div className="mb-5 sm:mb-6">
                             <div
-                                className="inline-flex items-center gap-1.5"
+                                className="inline-flex items-center justify-center gap-1.5 text-center"
                                 style={{
                                     padding: '6px 16px',
                                     borderRadius: 8,
@@ -125,7 +125,7 @@ export default function LandingPage() {
 
                         {/* Headline */}
                         <h1
-                            className="text-4xl sm:text-5xl xl:text-6xl font-bold tracking-tight mb-6 leading-[1.08] text-white"
+                            className="text-[30px] sm:text-5xl xl:text-6xl font-bold tracking-tight mb-5 sm:mb-6 leading-[1.1] text-white break-words"
                         >
                             Automate Smarter with{" "}
                             <span className="bg-gradient-to-r from-purple-400 via-blue-500 to-indigo-400 bg-clip-text text-transparent">
@@ -136,24 +136,24 @@ export default function LandingPage() {
 
                         {/* Sub */}
                         <p
-                            className="text-lg max-w-xl mb-10 leading-relaxed text-gray-400 mx-auto lg:mx-0"
+                            className="text-base sm:text-lg max-w-xl mb-8 sm:mb-10 leading-relaxed text-gray-400 mx-auto lg:mx-0"
                         >
                             A complete suite of intelligent tools to capture leads and automate follow-ups. Manage every channel from one powerful dashboard.
                         </p>
 
                         {/* Stats Row */}
-                        <div className="flex flex-col sm:flex-row justify-center lg:justify-start gap-6 mb-10">
+                        <div className="grid grid-cols-3 sm:flex sm:flex-row justify-center lg:justify-start gap-3 sm:gap-6 mb-8 sm:mb-10">
                             {[
                                 { icon: <Users size={20} color="#A78BFA" />, value: "10K+", label: "Leads Captured" },
                                 { icon: <TrendingUp size={20} color="#A78BFA" />, value: "85%", label: "Faster Growth" },
                                 { icon: <Building2 size={20} color="#A78BFA" />, value: "500+", label: "Campaigns Sent" },
                             ].map((s, i) => (
-                                <div key={i} className="flex items-center gap-3">
+                                <div key={i} className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
                                     <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
                                         {s.icon}
                                     </div>
-                                    <div className="text-left">
-                                        <p className="text-[26px] font-light tracking-tight leading-none text-white">{s.value}</p>
+                                    <div className="text-center sm:text-left">
+                                        <p className="text-2xl sm:text-[26px] font-light tracking-tight leading-none text-white">{s.value}</p>
                                         <p className="text-xs text-gray-400 mt-1">{s.label}</p>
                                     </div>
                                 </div>
@@ -172,17 +172,17 @@ export default function LandingPage() {
                     </div>
 
                     {/* Right: Login Form */}
-                    <div id="login-form" className="w-full lg:max-w-[480px] flex-shrink-0 mx-auto">
+                    <div id="login-form" className="w-full max-w-[480px] min-w-0 flex-shrink-0 mx-auto">
                         <div style={{
                             background: '#1C1C1E',
                             borderRadius: 24,
-                            padding: '40px 32px',
+                            padding: 'clamp(24px, 6vw, 40px) clamp(18px, 5vw, 32px)',
                             boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
                             border: '1px solid rgba(255,255,255,0.05)',
                         }}>
                             {/* Logo */}
                             <div className="flex flex-col items-center pb-6 pt-2 text-center">
-                                <div className="relative w-[220px] h-[100px]">
+                                <div className="relative w-[180px] h-[80px] sm:w-[220px] sm:h-[100px]">
                                     <Image src="/logo.png" alt="World Wide Real Estate" fill className="object-contain" priority />
                                 </div>
                             </div>
@@ -193,7 +193,7 @@ export default function LandingPage() {
             </section>
 
             {/* ── Feature Cards ── */}
-            <section id="features" className="py-24 px-6">
+            <section id="features" className="py-14 sm:py-24 px-4 sm:px-6">
                 <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-5">
                     {[
                         {
@@ -222,7 +222,7 @@ export default function LandingPage() {
                                 backdropFilter: 'blur(40px) saturate(180%)',
                                 WebkitBackdropFilter: 'blur(40px) saturate(180%)',
                                 borderRadius: 24,
-                                padding: '28px 28px 32px',
+                                padding: 'clamp(20px, 5vw, 28px) clamp(20px, 5vw, 28px) clamp(24px, 5vw, 32px)',
                                 outline: '1px solid rgba(255,255,255,0.07)',
                                 outlineOffset: -1,
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.20), 0 16px 40px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06)',
