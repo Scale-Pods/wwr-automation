@@ -1,6 +1,8 @@
 import { callDateFilter } from '@/lib/call-date-filter';
 import { NextResponse } from 'next/server';
 import { telephonyCost } from '@/lib/telephony-cost';
+import { slotForCall } from '@/lib/call-slots';
+import { isPositiveCall } from '@/lib/call-positive';
 import { normalizeCallRoute, isNoAnswerStatus, CALL_ROUTES } from '@/app/api/calls/route';
 
 export const dynamic = 'force-dynamic';
@@ -49,7 +51,7 @@ export interface VoiceMetrics {
     /** Per outbound-dialer route (commercial/business/residential): total
      *  dial attempts (connected + no-answer), connected-only count, and
      *  no-answer/no-connect count, in the selected date range. */
-    routeBreakdown: Record<string, { calls: number; connected: number; noAnswer: number; positive: number }>;
+    routeBreakdown: Record<string, { calls: number; connected: number; noAnswer: number; positive: number; inbound: number }>;
 }
 
 function endOfDay(iso: string): string {
@@ -139,7 +141,7 @@ export async function GET(req: Request) {
                     const callSlotCols = Array.from({ length: 8 }, (_, i) => i + 1)
                         .flatMap(n => [`call_${n}_date`, `call_${n}_status`, `call_${n}_sentiment`])
                         .join(',');
-                    return `${supabaseUrl}/rest/v1/outreach_table?select=lead_id,crm_id,phone,call_route,${callSlotCols}`;
+                    return `${supabaseUrl}/rest/v1/outreach_table?select=lead_id,crm_id,phone,call_route,lead_status,lead_stage,${callSlotCols}`;
                 })(),
                 headers
             ).catch(() => [] as any[]),
@@ -168,12 +170,8 @@ export async function GET(req: Request) {
                 if (cp.length >= 6) lead = leadByPhone.get(cp);
             }
             if (!lead) continue;
-            const slots = [
-                lead.call_1_sentiment, lead.call_2_sentiment, lead.call_3_sentiment, lead.call_4_sentiment,
-                lead.call_5_sentiment, lead.call_6_sentiment, lead.call_7_sentiment, lead.call_8_sentiment,
-            ];
-            const positiveSlot = slots.find(s => String(s || '').toLowerCase().includes('positive'));
-            sentimentById.set(r.id, positiveSlot || slots.find(Boolean) || null);
+            // Each call uses ITS OWN slot (matched by call date), same as /api/calls and Call Logs.
+            sentimentById.set(r.id, slotForCall(lead, r.started_at || r.created_at)?.sentiment || null);
         }
 
         // ── Aggregate dated rows ──────────────────────────────────────────
@@ -200,7 +198,7 @@ export async function GET(req: Request) {
 
         const routeBreakdown: VoiceMetrics['routeBreakdown'] = {};
         for (const route of CALL_ROUTES) {
-            routeBreakdown[route] = { calls: 0, connected: 0, noAnswer: 0, positive: 0 };
+            routeBreakdown[route] = { calls: 0, connected: 0, noAnswer: 0, positive: 0, inbound: 0 };
         }
 
         datedRows.forEach((r: any) => {
@@ -228,8 +226,17 @@ export async function GET(req: Request) {
             // Sentiment comes from the lead's call_N_sentiment slot, joined by
             // lead_id + chronological call order (see sentimentById above).
             const sentiment = String(sentimentById.get(r.id) || '').toLowerCase();
-            const isPositive = sentiment.includes('positive');
-            const isCurious = sentiment.includes('curious');
+            // Positive = shared rule (sentiment positive/curious, positive lead status or stage,
+            // and a call of at least 15 seconds) — see lib/call-positive.ts.
+            const sentLead = r.lead_id ? leadByKey.get(String(r.lead_id)) : undefined;
+            const sentLeadByPhone = sentLead ?? leadByPhone.get(String(r.customer_phone || '').replace(/\D/g, ''));
+            const isPositive = isPositiveCall({
+                sentiment,
+                leadStatus: sentLeadByPhone?.lead_status,
+                leadStage: sentLeadByPhone?.lead_stage,
+                durationSeconds: dur,
+            });
+            const isCurious = !isPositive && sentiment.includes('curious');
             if (isPositive) { sentimentPos++; positiveCount++; }
             else if (isCurious) { sentimentCurious++; curiousCount++; }
             else if (sentiment.includes('negative')) sentimentNeg++;
@@ -247,6 +254,7 @@ export async function GET(req: Request) {
             const route = (routeLead ? normalizeCallRoute(routeLead.call_route) : null) ?? normalizeCallRoute(r.vapi_account);
             if (route) {
                 routeBreakdown[route].calls++;
+                if (isInboundRow) routeBreakdown[route].inbound++;
                 if (isCompleted) routeBreakdown[route].connected++;
                 if (isPositive) routeBreakdown[route].positive++;
             }
@@ -347,7 +355,7 @@ export async function GET(req: Request) {
         // the call), across every call in range, not just a B2B/B2C subset.
         const overallRate = totalCalls > 0 ? Math.round((overallCompletedCount / totalCalls) * 1000) / 10 : 0;
         const overallPositiveRate = totalCalls > 0 ? Math.round((sentimentPos / totalCalls) * 1000) / 10 : 0;
-        const overallPositiveOrCuriousRate = totalCalls > 0 ? Math.round(((sentimentPos + sentimentCurious) / totalCalls) * 1000) / 10 : 0;
+        const overallPositiveOrCuriousRate = totalCalls > 0 ? Math.round((sentimentPos / totalCalls) * 1000) / 10 : 0;
 
         const metrics: VoiceMetrics = {
             totalCalls,

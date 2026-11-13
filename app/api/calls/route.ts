@@ -1,4 +1,5 @@
 import { callDateFilter } from '@/lib/call-date-filter';
+import { isPositiveCall } from '@/lib/call-positive';
 import { NextResponse } from 'next/server';
 import { OUTREACH_TABLE, VAPI_CALL_LOGS } from '@/lib/outreach-types';
 import { countryOf, dialCodeOf, telephonyCost } from '@/lib/telephony-cost';
@@ -251,6 +252,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
             assistantId: d.assistantId || null,
             phoneNumber: 'Unknown',
             sentiment,
+            isPositive: isPositiveCall({ sentiment, leadStatus: lead?.lead_status, leadStage: lead?.lead_stage, durationSeconds: dur }),
             note,
             callRoute: (lead ? normalizeCallRoute(lead.call_route) : null) ?? normalizeCallRoute(d.vapi_account),
             isNoAnswer: false,

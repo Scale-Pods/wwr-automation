@@ -76,7 +76,7 @@ export interface VoiceMetrics {
     noAnswerCalls: number;
     recordingCount: number;
     sentimentBreakdown: { positive: number; negative: number; neutral: number; curious: number };
-    routeBreakdown: Record<string, { calls: number; connected: number; noAnswer: number; positive: number }>;
+    routeBreakdown: Record<string, { calls: number; connected: number; noAnswer: number; positive: number; inbound: number }>;
 }
 
 interface DataContextType {

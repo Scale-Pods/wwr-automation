@@ -226,11 +226,11 @@ export default function VoiceDashboardPage() {
                     <h3 style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.022em', color: 'var(--label-primary)' }}>
                         Calls by Route
                     </h3>
-                    <InfoTooltip text="Calls grouped by the type of lead: Commercial, Business, or Residential. Connected = reached a real conversation; No Answer = never picked up; Positive Sentiment = the lead reacted well on the call." />
+                    <InfoTooltip text="Calls grouped by the type of lead: Commercial, Business, or Residential. Connected = reached a real conversation; No Answer = never picked up; Inbound = calls the lead made to us; Positive Sentiment = positive or curious sentiment, or a positive lead status (Expression Of Interest, Callback- Plan Postponed, Proposal Requested, Viewing Scheduled) on a call of 15 seconds or more." />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {(Object.keys(ROUTE_META) as Array<keyof typeof ROUTE_META>).map(route => {
-                        const d = routeBreakdown[route] ?? { calls: 0, connected: 0, noAnswer: 0, positive: 0 };
+                        const d = routeBreakdown[route] ?? { calls: 0, connected: 0, noAnswer: 0, positive: 0, inbound: 0 };
                         const meta = ROUTE_META[route];
                         const connectRate = d.calls > 0 ? Math.round((d.connected / d.calls) * 1000) / 10 : 0;
                         return (
@@ -247,6 +247,10 @@ export default function VoiceDashboardPage() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
                                         <span>No Answer / No Connect</span>
                                         <span style={{ fontWeight: 600, color: 'var(--red)' }}>{d.noAnswer}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
+                                        <span>Inbound (included above)</span>
+                                        <span style={{ fontWeight: 600, color: 'var(--label-primary)' }}>{d.inbound ?? 0}</span>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
                                         <span>Positive Sentiment</span>

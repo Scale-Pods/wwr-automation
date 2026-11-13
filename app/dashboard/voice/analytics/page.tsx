@@ -101,7 +101,7 @@ export default function VoiceAnalyticsPage() {
                     <StatCard title="No Answer" value={(m?.noAnswerCalls ?? 0).toLocaleString()} change="Did Not Connect" icon={<PhoneMissed style={{ width: 18, height: 18 }} />} color="var(--red)" isNegative info="Calls where the lead never picked up, so no conversation happened." />
                     <StatCard title="Call Pick-up Rate" value={`${(m?.pickupRate ?? 0).toFixed(1)}%`} change="Assistant/customer ended call" icon={<Phone style={{ width: 18, height: 18 }} />} color="var(--purple)" info="Out of every call attempt, the share where the lead actually answered and had a real conversation (not voicemail or a dropped call)." />
                     <StatCard title="Completion Rate" value={`${(m?.completionRate ?? 0).toFixed(1)}%`} change="Completed Conversation" icon={<CheckCircle style={{ width: 18, height: 18 }} />} color="var(--green)" info="Same measure as Pick-up Rate: calls that reached a real conversation and ended naturally, either side hanging up." />
-                    <StatCard title="Positive Response" value={`${(m?.positiveOrCuriousRate ?? 0).toFixed(1)}%`} change="Sentiment = Positive or Curious" icon={<CheckCircle style={{ width: 18, height: 18 }} />} color="var(--blue)" info="Out of every call attempt, the share where our AI read the lead's reaction as positive or curious about the property." />
+                    <StatCard title="Positive Response" value={`${(m?.positiveOrCuriousRate ?? 0).toFixed(1)}%`} change="Positive / curious / positive status, 15s+" icon={<CheckCircle style={{ width: 18, height: 18 }} />} color="var(--blue)" info="Out of every call attempt, the share where our AI read the lead's reaction as positive or curious about the property." />
                 </div>
             </div>
 
@@ -112,11 +112,11 @@ export default function VoiceAnalyticsPage() {
                         <PhoneOff style={{ width: 14, height: 14, color: '#fff' }} />
                     </div>
                     <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--label-primary)' }}>Calls by Route</h2>
-                    <InfoTooltip text="Calls grouped by the type of lead: Commercial, Business, or Residential. Connected = reached a real conversation; No Answer = never picked up; Positive Sentiment = the lead reacted well on the call." />
+                    <InfoTooltip text="Calls grouped by the type of lead: Commercial, Business, or Residential. Connected = reached a real conversation; No Answer = never picked up; Inbound = calls the lead made to us; Positive Sentiment = positive or curious sentiment, or a positive lead status (Expression Of Interest, Callback- Plan Postponed, Proposal Requested, Viewing Scheduled) on a call of 15 seconds or more." />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {(Object.keys(ROUTE_META) as Array<keyof typeof ROUTE_META>).map(route => {
-                        const d = routeBreakdown[route] ?? { calls: 0, connected: 0, noAnswer: 0, positive: 0 };
+                        const d = routeBreakdown[route] ?? { calls: 0, connected: 0, noAnswer: 0, positive: 0, inbound: 0 };
                         const meta = ROUTE_META[route];
                         const connectRate = d.calls > 0 ? Math.round((d.connected / d.calls) * 1000) / 10 : 0;
                         return (
@@ -133,6 +133,10 @@ export default function VoiceAnalyticsPage() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
                                         <span>No Answer / No Connect</span>
                                         <span style={{ fontWeight: 600, color: 'var(--red)' }}>{d.noAnswer}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
+                                        <span>Inbound (included above)</span>
+                                        <span style={{ fontWeight: 600, color: 'var(--label-primary)' }}>{d.inbound ?? 0}</span>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--label-secondary)' }}>
                                         <span>Positive Sentiment</span>

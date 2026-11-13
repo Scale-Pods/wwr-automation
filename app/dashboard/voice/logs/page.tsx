@@ -124,6 +124,14 @@ export default function VoiceLogsPage() {
     const [allCallsMapped, setAllCallsMapped] = useState<any[]>([]);
     const [calls, setCalls] = useState<any[]>([]);
     const loading = loadingCalls;
+    // Only show the small "updating" pill if a refresh takes >300ms, so quick filter changes
+    // don't flash anything. The table keeps its rows on screen meanwhile (no black/white flicker).
+    const [showUpdating, setShowUpdating] = useState(false);
+    useEffect(() => {
+        if (!loading) { setShowUpdating(false); return; }
+        const t = setTimeout(() => setShowUpdating(true), 300);
+        return () => clearTimeout(t);
+    }, [loading]);
     const [selectedCall, setSelectedCall] = useState<any>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [dateRange, setDateRange] = useState<any>(getDefaultRange());
@@ -197,10 +205,10 @@ export default function VoiceLogsPage() {
             if (answeredFilter === 'not-answered' && !call.isNoAnswer) return false;
             if (sentimentFilter !== "all") {
                 const s = String(call.sentiment || "").toLowerCase();
-                if (sentimentFilter === "positive" && !s.includes("positive")) return false;
-                if (sentimentFilter === "curious" && !s.includes("curious")) return false;
+                if (sentimentFilter === "positive" && !call.isPositive) return false;
+                if (sentimentFilter === "curious" && (call.isPositive || !s.includes("curious"))) return false;
                 if (sentimentFilter === "negative" && !s.includes("negative")) return false;
-                if (sentimentFilter === "neutral" && (s.includes("positive") || s.includes("curious") || s.includes("negative"))) return false;
+                if (sentimentFilter === "neutral" && (call.isPositive || s.includes("positive") || s.includes("curious") || s.includes("negative"))) return false;
             }
             if (typeFilter !== "all") {
                 const normalizedCallType = (call.type || (call.isInbound ? "Inbound" : "Outbound")).toLowerCase();
@@ -243,12 +251,10 @@ export default function VoiceLogsPage() {
                     <WorldWideLoader />
                 </div>
             )}
-            {loading && allCallsMapped.length > 0 && (
-                <div style={{ position: 'absolute', inset: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.06)', backdropFilter: 'blur(1px)', pointerEvents: 'none' }}>
-                    <div className="liquid-card" style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                        <WorldWideLoader />
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Updating Logs...</span>
-                    </div>
+            {showUpdating && allCallsMapped.length > 0 && (
+                <div style={{ position: 'fixed', top: 72, left: '50%', transform: 'translateX(-50%)', zIndex: 40, pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, background: 'var(--bg-layer1, #1c1c1e)', border: '1px solid var(--glass-border)', boxShadow: '0 4px 16px rgba(0,0,0,0.25)' }}>
+                    <RefreshCw style={{ width: 12, height: 12, color: 'var(--blue)', animation: 'spin 1s linear infinite' }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--label-secondary)' }}>Updating logs…</span>
                 </div>
             )}
 
