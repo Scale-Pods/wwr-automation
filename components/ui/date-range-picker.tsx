@@ -125,7 +125,7 @@ export function DateRangePicker({
     };
 
     return (
-        <div className={cn("inline-flex shrink-0 w-[230px]", className)}>
+        <div className={cn("inline-flex shrink-0 w-[230px] max-w-full", className)}>
             <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
                     <button
@@ -148,11 +148,12 @@ export function DateRangePicker({
                     </button>
                 </PopoverTrigger>
                 <PopoverContent
-                    className="w-auto p-0 border border-[var(--glass-border)] bg-[var(--bg-layer1)] rounded-[14px] shadow-2xl overflow-hidden z-50 backdrop-blur-xl"
+                    className="w-auto p-0 border border-[var(--glass-border)] bg-[var(--bg-layer1)] rounded-[14px] shadow-2xl overflow-hidden z-50 backdrop-blur-xl max-w-[calc(100vw-16px)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto"
                     align="end"
                     sideOffset={6}
+                    collisionPadding={8}
                 >
-                    <div className="flex flex-col sm:flex-row items-stretch max-h-[80vh] overflow-y-auto sm:overflow-visible">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:overflow-visible">
                         {/* Preset List */}
                         <div className="p-1.5 border-b sm:border-b-0 sm:border-r border-[var(--glass-border)] w-full sm:w-[135px] shrink-0 flex flex-row sm:flex-col gap-0.5 overflow-x-auto sm:overflow-visible bg-[var(--fill-quaternary)]">
                             {presets.map((preset) => (

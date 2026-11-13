@@ -48,8 +48,8 @@ export default function LandingPage() {
                         <div className="relative flex items-center h-[36px] w-[110px] sm:h-[44px] sm:w-[180px] shrink-0">
                             <Image src="/logo.png" alt="World Wide Real Estate" fill className="object-contain object-left" priority />
                         </div>
-                        <div className="hidden sm:block" style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)' }} />
-                        <span className="hidden min-[420px]:inline-flex" style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.40)', letterSpacing: '-0.01em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <div className="hidden md:block" style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)' }} />
+                        <span className="hidden md:inline-flex whitespace-nowrap" style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.40)', letterSpacing: '-0.01em', alignItems: 'center', gap: 4 }}>
                             Powered by{' '}
                             <span style={{ fontWeight: 700, color: '#ffffff', letterSpacing: '-0.02em', fontSize: 13 }}>ScalePods</span>
                         </span>
@@ -57,6 +57,7 @@ export default function LandingPage() {
 
                     <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                         <button
+                            className="hidden sm:inline-block"
                             onClick={() => document.getElementById('login-form')?.scrollIntoView({ behavior: 'smooth' })}
                             style={{
                                 padding: '8px 10px',
@@ -122,6 +123,11 @@ export default function LandingPage() {
                                 <Sparkles size={14} /> AI-Powered Growth Automation Platform
                             </div>
                         </div>
+
+                        {/* Powered by (mobile only; header hides it) */}
+                        <p className="md:hidden -mt-2 mb-5 text-[11px] text-white/40 whitespace-nowrap">
+                            Powered by <span className="font-bold text-white">ScalePods</span>
+                        </p>
 
                         {/* Headline */}
                         <h1
