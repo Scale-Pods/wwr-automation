@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { RefreshCw, ChevronLeft, ChevronRight, User, Search, Info, Activity } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WorldWideLoader } from "@/components/world-wide-loader";
@@ -125,7 +126,7 @@ export default function VoiceLogsPage() {
     const loading = loadingCalls;
     const [selectedCall, setSelectedCall] = useState<any>(null);
     const [modalOpen, setModalOpen] = useState(false);
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
     const [sentimentFilter, setSentimentFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
     const [routeFilter, setRouteFilter] = useState("all");
@@ -135,7 +136,7 @@ export default function VoiceLogsPage() {
     const [costModalOpen, setCostModalOpen] = useState(false);
 
     useEffect(() => {
-        setDateRange({ from: subDays(new Date(), 7), to: new Date() });
+        setDateRange(getDefaultRange());
     }, []);
 
     useEffect(() => {

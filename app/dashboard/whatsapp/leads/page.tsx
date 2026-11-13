@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { Input } from "@/components/ui/input";
 import {
     Search,
@@ -27,7 +28,8 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { WhatsAppChatDetail } from "@/components/dashboard/whatsapp-chat-detail";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { isReplyTrackPositive, isPropertyFinderLead, lastWaActivityDate } from "@/lib/outreach-types";
+import { isReplyTrackPositive, isPropertyFinderLead } from "@/lib/outreach-types";
+import { rangeFromDates, waFirstContactInRange, waHasReplied } from "@/lib/channel-metrics";
 
 interface UnifiedLead {
     id: string;
@@ -40,12 +42,6 @@ interface UnifiedLead {
     raw: any;
 }
 
-function getLeadDate(lead: any): Date | null {
-    const ref = lastWaActivityDate(lead);
-    if (ref) { const d = new Date(ref); if (!isNaN(d.getTime())) return d; }
-    return null;
-}
-
 export default function WhatsappLeadsPage() {
     const [waLeads, setWaLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -55,10 +51,7 @@ export default function WhatsappLeadsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const leadsPerPage = 10;
 
-    const [dateRange, setDateRange] = useState<any>({
-        from: subDays(new Date(), 7),
-        to: new Date(),
-    });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
 
     const [replyFilter, setReplyFilter] = useState<string[]>([]);
     const [pfLeadOnly, setPfLeadOnly] = useState(false);
@@ -93,17 +86,14 @@ export default function WhatsappLeadsPage() {
     const allUnifiedLeads = useMemo<UnifiedLead[]>(() => {
         const list: UnifiedLead[] = [];
 
+        // Every lead contacted on WhatsApp inside the selected range — the same
+        // set (and count) as "Unique Leads Contacted" on the WhatsApp overview.
+        const range = rangeFromDates(dateRange?.from, dateRange?.to);
         waLeads.forEach((lead, idx) => {
-            // Only leads with an actual inbound WhatsApp message belong on this page.
-            if (!lead.last_whatsapp_message || !String(lead.last_whatsapp_message).trim()) return;
+            const firstContact = waFirstContactInRange(lead, range);
+            if (firstContact == null) return;
             const id = String(lead.lead_id || lead.crm_id || lead.id || `lead-${idx}`);
-            let hasReplied = isReplyTrackPositive(lead.whatsapp_reply_track);
-            if (!hasReplied && Array.isArray(lead.whatsapp_conversation)) {
-                hasReplied = lead.whatsapp_conversation.some((m: any) => {
-                    const role = m.role || m.type || m.sender;
-                    return role === 'user' || role === 'User' || role === 'customer';
-                });
-            }
+            const hasReplied = waHasReplied(lead);
             const fullName = lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || "—";
             list.push({
                 id,
@@ -112,13 +102,13 @@ export default function WhatsappLeadsPage() {
                 email: lead.email,
                 hasReplied,
                 isPfLead: isPropertyFinderLead(lead),
-                date: getLeadDate(lead),
+                date: new Date(firstContact),
                 raw: lead
             });
         });
 
         return list;
-    }, [waLeads]);
+    }, [waLeads, dateRange]);
 
     const filteredLeads = useMemo(() => {
         setCurrentPage(1);
@@ -168,7 +158,7 @@ export default function WhatsappLeadsPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: 'var(--ls-heading)', color: 'var(--label-primary)' }}>WhatsApp Leads</h1>
-                    <p style={{ fontSize: 13, color: 'var(--label-secondary)', marginTop: 2 }}>Review all leads contacted via WhatsApp</p>
+                    <p style={{ fontSize: 13, color: 'var(--label-secondary)', marginTop: 2 }}>Review all leads contacted via WhatsApp · {loading ? '…' : allUnifiedLeads.length.toLocaleString()} unique leads in range</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {(replyFilter.length > 0 || searchQuery || pfLeadOnly) && (
@@ -355,7 +345,7 @@ export default function WhatsappLeadsPage() {
 
             {/* Chat Detail Modal */}
             <Dialog open={!!selectedLeadIdForChat} onOpenChange={(open) => { if (!open) { setSelectedLeadIdForChat(null); setSelectedLeadObj(null); } }}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-6 gap-0 apple-dialog">
+                <DialogContent hideClose className="w-[calc(100vw-24px)] max-w-[720px] h-[680px] max-h-[90dvh] grid-rows-[minmax(0,1fr)] overflow-hidden p-0 gap-0 apple-dialog">
                     <DialogHeader className="sr-only">
                         <DialogTitle>WhatsApp Chat Detail</DialogTitle>
                     </DialogHeader>

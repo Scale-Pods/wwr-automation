@@ -1,3 +1,4 @@
+import { callDateFilter } from '@/lib/call-date-filter';
 import { NextResponse } from 'next/server';
 import { OUTREACH_TABLE, VAPI_CALL_LOGS } from '@/lib/outreach-types';
 import { countryOf, dialCodeOf, telephonyCost } from '@/lib/telephony-cost';
@@ -32,7 +33,11 @@ export function normalizeCallRoute(v: any): CallRoute | null {
 export function isNoAnswerStatus(v: any): boolean {
     const s = String(v || '').trim();
     if (!s) return false;
-    return !/^Sent\b/i.test(s);
+    // Only genuine dial attempts that never reached a live conversation. Excluded:
+    // "Sent" (in flight / has a vapi_call_logs row), queued/held/pending (scheduled,
+    // not dialled yet) and answered-call outcomes like "Expression Of Interest" or
+    // "Not Interested" (those calls already have a vapi_call_logs row).
+    return /^(no answer|busy|failed|voicemail|declined|unreachable|not reachable|cancel)/i.test(s);
 }
 
 /** Build lookup maps from outreach_table so calls can resolve a real lead. */
@@ -148,22 +153,22 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
 
     // vapi_call_logs columns per the new schema
     const columns = [
-        'id', 'started_at', 'customer_phone', 'customer_name', 'duration_seconds',
+        'id', 'started_at', 'created_at', 'customer_phone', 'customer_name', 'duration_seconds',
         'status', 'cost_usd', 'source', 'transcript', 'summary', 'recording_url',
         'vapi_account', 'assistantId', 'type', 'lead_id', 'lead_id_found',
         'has_transcript', 'vapi_pipeline', 'vapi_stage',
     ].join(',');
     const BATCH_SIZE = 1000;
 
-    let dateParam = '';
-    if (fromDate) dateParam += `&started_at=gte.${fromDate.toISOString()}`;
+    let endISO: string | null = null;
     if (toDate) {
         const end = new Date(toDate);
         if (end.getUTCHours() === 0 && end.getUTCMinutes() === 0 && end.getUTCSeconds() === 0) {
             end.setUTCHours(23, 59, 59, 999);
         }
-        dateParam += `&started_at=lte.${end.toISOString()}`;
+        endISO = end.toISOString();
     }
+    const dateParam = callDateFilter(fromDate ? fromDate.toISOString() : null, endISO);
 
     const { byLeadId, byPhone, rows: leadRows } = await loadLeadIndex();
 
@@ -187,7 +192,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
         if (lead) {
             // Each call shows ITS OWN slot (matched by call date), not one
             // lead-wide slot repeated on every call.
-            const chosen = slotForCall(lead, d.started_at);
+            const chosen = slotForCall(lead, d.started_at || d.created_at);
             sentiment = chosen?.sentiment || null;
             note = chosen?.note || null;
         }
@@ -211,7 +216,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
 
         return {
             id: d.id,
-            startedAt: d.started_at,
+            startedAt: d.started_at || d.created_at,
             durationSeconds: dur,
             durationMinutes: Math.round((dur / 60) * 100) / 100,
             costValue: totalCost,
@@ -250,7 +255,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
             callRoute: lead ? normalizeCallRoute(lead.call_route) : null,
             isNoAnswer: false,
             breakdown: { agent: agentCost, telephony, total: totalCost },
-            raw: { id: d.id, startedAt: d.started_at, assistantId: d.assistantId, isInbound, lead_id: d.lead_id },
+            raw: { id: d.id, startedAt: d.started_at || d.created_at, assistantId: d.assistantId, isInbound, lead_id: d.lead_id },
         };
     };
 

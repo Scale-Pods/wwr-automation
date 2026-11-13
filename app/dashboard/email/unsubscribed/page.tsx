@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useState, useMemo } from "react";
 import { subDays } from "date-fns";
@@ -26,7 +27,7 @@ export default function UnsubscribedPage() {
     const loading = loadingLeads;
 
     const [searchTerm, setSearchTerm] = useState("");
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 30), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
     const [repliedFilter, setRepliedFilter] = useState("all");
     const [board, setBoard] = useState<EmailBoardKey>("all");
 

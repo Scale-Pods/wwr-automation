@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useContext } from "react";
-import { RefreshCw, MessageSquare, User, Bot, Link as LinkIcon, Check, Languages } from "lucide-react";
+import { RefreshCw, MessageSquare, User, Bot, Link as LinkIcon, Check, Languages, X } from "lucide-react";
 import { ConsolidatedLead } from "@/lib/leads-utils";
 import { DataContext } from "@/context/DataContext";
 import { parseJsonArray, coerceTimestamp, parseQatarDateTime } from "@/lib/outreach-types";
@@ -204,7 +204,7 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
 
     return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", maxHeight: "80dvh", background: "var(--bg-layer1)", borderRadius: 14, padding: 18, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12, flexShrink: 0 }}>
                 <div>
                     <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--label-primary)", letterSpacing: "-0.01em", margin: 0 }}>{lead.name}</h2>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, fontSize: 12, color: "var(--label-secondary)", flexWrap: "wrap" }}>
@@ -236,6 +236,12 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                         {copied ? <Check style={{ width: 12, height: 12 }} /> : <LinkIcon style={{ width: 12, height: 12 }} />}
                         {copied ? "Copied" : "Share Link"}
                     </button>
+                    {onClose && (
+                        <button onClick={onClose} aria-label="Close"
+                            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, cursor: "pointer", background: "var(--fill-tertiary)", border: "1px solid var(--glass-border)", color: "var(--label-primary)" }}>
+                            <X style={{ width: 14, height: 14 }} />
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -249,7 +255,7 @@ export function WhatsAppChatDetail({ customerId, onClose, initialLead }: WhatsAp
                         }}>{lead.wa_sentiment}</span>
                     )}
                     {lead.wa_note && (
-                        <div style={{ background: "var(--fill-quaternary)", borderRadius: 10, padding: "8px 11px" }}>
+                        <div className="custom-scrollbar" style={{ background: "var(--fill-quaternary)", borderRadius: 10, padding: "8px 11px", maxHeight: 84, overflowY: "auto" }}>
                             <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--label-tertiary)", margin: "0 0 3px" }}>AI Note</p>
                             {String(lead.wa_note).split("|").map((part: string, i: number) => {
                                 const t = part.trim();

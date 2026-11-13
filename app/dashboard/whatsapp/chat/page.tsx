@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,8 @@ import { Search, Filter, Users, Send, MessageSquare, RefreshCw, ChevronLeft, Che
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays, startOfDay, endOfDay } from "date-fns";
-import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, lastWaActivityDate } from "@/lib/outreach-types";
+import { waStats, rangeFromDates, waFirstContactInRange, inRange } from "@/lib/channel-metrics";
+import { isReplyTrackPositive, coerceTimestamp, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, lastWaActivityDate, isWaSlotProcessed } from "@/lib/outreach-types";
 
 // ── one lead's WhatsApp signals from outreach_table ──────────────────────────
 function waSignals(lead: any) {
@@ -20,7 +22,7 @@ function waSignals(lead: any) {
         const message = lead[`wa_${n}`] ?? null;
         const status = lead[`wa_${n}_status`] ?? null;
         const sent_at = lead[`wa_${n}_sent_at`] ?? null;
-        if (message || status || sent_at) slotMsgs.push({ n, message, status, sent_at });
+        if ((message || status || sent_at) && isWaSlotProcessed(lead, n)) slotMsgs.push({ n, message, status, sent_at });
     }
     // "Messages Sent" = outbound bubbles in the conversation, floored at the
     // number of populated wa_N slots (shared helper — same everywhere).
@@ -46,7 +48,7 @@ export default function WhatsappChatPage() {
     const [loadingWA, setLoadingWA] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
 
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
 
     useEffect(() => {
         if (!dateRange?.from) return;
@@ -89,16 +91,18 @@ export default function WhatsappChatPage() {
     const [pendingFilters, setPendingFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; pfLead: boolean; waSlots: number[]; }>({ replyStatus: [], messageStatus: [], pfLead: false, waSlots: [] });
     const [activeFilters, setActiveFilters] = useState<{ replyStatus: string[]; messageStatus: string[]; pfLead: boolean; waSlots: number[]; }>({ replyStatus: [], messageStatus: [], pfLead: false, waSlots: [] });
 
+    const range = useMemo(() => rangeFromDates(dateRange?.from, dateRange?.to), [dateRange]);
+
+    // Chats to list: every lead contacted in range, plus any lead whose latest
+    // WhatsApp activity (e.g. a reply to an older message) falls in range.
     const leadsInRange = useMemo(() => {
-        const from = dateRange?.from ? startOfDay(new Date(dateRange.from)).getTime() : null;
-        const to = endOfDay(new Date(dateRange?.to || dateRange?.from || new Date())).getTime();
-        const inRange = (t: number | null) => !from || (t != null && t >= from && t <= to);
         return leads.filter(lead => {
+            if (waFirstContactInRange(lead, range) != null) return true;
             const s = waSignals(lead);
             const t = s.lastDate ? new Date(s.lastDate).getTime() : null;
-            return inRange(t) || t == null;
+            return inRange(t, range) || t == null;
         });
-    }, [leads, dateRange]);
+    }, [leads, range]);
 
     const filteredLeads = useMemo(() => {
         return leadsInRange.filter(lead => {
@@ -134,25 +138,26 @@ export default function WhatsappChatPage() {
 
     const activeLeads = filteredLeads;
 
+    // Top cards use the shared date-range definitions (lib/channel-metrics.ts), so they
+    // always match the WhatsApp overview / analytics and the Master dashboard — they do
+    // not change when the search box or sidebar filters narrow the chat list.
     const stats = useMemo(() => {
-        let sentCount = 0, repliedCount = 0, failedCount = 0;
-        activeLeads.forEach(lead => {
-            const s = waSignals(lead);
-            sentCount += s.botCount;
-            if (s.replied) repliedCount++;
-            failedCount += s.failedCount;
-        });
-        const uniqueSentCount = activeLeads.length;
-        const responseRate = uniqueSentCount > 0 ? ((repliedCount / uniqueSentCount) * 100).toFixed(1) : "0.0";
-        return { totalLeads: activeLeads.length, sentCount, uniqueSentCount, repliedCount, failedCount, responseRate };
-    }, [activeLeads]);
+        const st = waStats(leads, range);
+        let failedCount = 0;
+        st.contactedRows.forEach(lead => { failedCount += waSignals(lead).failedCount; });
+        const responseRate = st.uniqueContacted > 0 ? ((st.replies / st.uniqueContacted) * 100).toFixed(1) : "0.0";
+        return { sentCount: st.messagesSent, uniqueSentCount: st.uniqueContacted, repliedCount: st.replies, failedCount, responseRate };
+    }, [leads, range]);
 
     const handleApplyFilters = () => setActiveFilters(pendingFilters);
     const handleResetFilters = () => {
         const reset = { replyStatus: [], messageStatus: [], pfLead: false, waSlots: [] };
         setPendingFilters(reset);
         setActiveFilters(reset);
+        setSearchQuery("");
     };
+    const hasActiveFilters = searchQuery !== "" || activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead || activeFilters.waSlots.length > 0
+        || pendingFilters.replyStatus.length > 0 || pendingFilters.messageStatus.length > 0 || pendingFilters.pfLead || pendingFilters.waSlots.length > 0;
     const toggleFilter = (type: "replyStatus" | "messageStatus", value: string) => {
         setPendingFilters(prev => {
             const current = prev[type];
@@ -222,7 +227,7 @@ export default function WhatsappChatPage() {
                     {showFilters ? "Hide" : "Show"} Filters
                     {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead || activeFilters.waSlots.length > 0) && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)", marginLeft: 2 }} />}
                 </button>
-                {(activeFilters.replyStatus.length > 0 || activeFilters.messageStatus.length > 0 || activeFilters.pfLead || activeFilters.waSlots.length > 0) && (
+                {hasActiveFilters && (
                     <button onClick={handleResetFilters} style={{ fontSize: 11, fontWeight: 700, color: "var(--blue)", background: "none", border: "none", cursor: "pointer" }}>RESET ALL</button>
                 )}
             </div>
@@ -234,6 +239,9 @@ export default function WhatsappChatPage() {
                             <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--label-primary)", fontSize: 13, fontWeight: 600 }}>
                                 <Filter style={{ width: 14, height: 14 }} /> Filters
                             </div>
+                            {hasActiveFilters && (
+                                <button onClick={handleResetFilters} style={{ fontSize: 11, fontWeight: 700, color: "var(--blue)", background: "none", border: "none", cursor: "pointer" }}>RESET ALL</button>
+                            )}
                         </div>
 
                         <FilterSection title="Reply Status">
@@ -350,7 +358,7 @@ export default function WhatsappChatPage() {
             </div>
 
             <Dialog open={!!selectedLeadId} onOpenChange={(open) => { if (!open) { setSelectedLeadId(null); setSelectedLeadObj(null); } }}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-6 gap-0">
+                <DialogContent hideClose className="w-[calc(100vw-24px)] max-w-[720px] h-[680px] max-h-[90dvh] grid-rows-[minmax(0,1fr)] overflow-hidden p-0 gap-0">
                     <DialogHeader className="sr-only"><DialogTitle>WhatsApp Chat Detail</DialogTitle></DialogHeader>
                     {selectedLeadId && (
                         <WhatsAppChatDetail customerId={selectedLeadId} initialLead={selectedLeadObj} onClose={() => { setSelectedLeadId(null); setSelectedLeadObj(null); }} />

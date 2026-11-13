@@ -1,5 +1,7 @@
+import { callDateFilter } from '@/lib/call-date-filter';
 import { NextResponse } from 'next/server';
-import { OUTREACH_TABLE, VAPI_CALL_LOGS, isReplyTrackPositive, hasEmailReply, isEmailSlotSent } from '@/lib/outreach-types';
+import { OUTREACH_TABLE, VAPI_CALL_LOGS } from '@/lib/outreach-types';
+import { waStats, emailStats, rangeFromISO } from '@/lib/channel-metrics';
 import { telephonyCost } from '@/lib/telephony-cost';
 
 export const dynamic = 'force-dynamic';
@@ -73,30 +75,28 @@ export async function GET(req: Request) {
     const outreachFilter =
         `created_at=gte.${encodeURIComponent(fromISO)}&created_at=lte.${encodeURIComponent(toISO)}`;
 
-    const callCols = encodeURIComponent(['id', 'started_at', 'cost_usd', 'customer_phone', 'duration_seconds', 'type'].join(','));
-    const callFilter =
-        `started_at=gte.${encodeURIComponent(fromISO)}&started_at=lte.${encodeURIComponent(toISO)}`;
+    const callCols = encodeURIComponent(['id', 'started_at', 'created_at', 'cost_usd', 'customer_phone', 'duration_seconds', 'type'].join(','));
+    const callFilter = callDateFilter(fromISO, toISO).replace(/^&/, '');
 
     try {
-        const [rows, callRows] = await Promise.all([
+        const [rows, allRows, callRows] = await Promise.all([
             fetchAllPages(`${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${outreachCols}&${outreachFilter}&order=created_at.desc`, headers),
+            fetchAllPages(`${supabaseUrl}/rest/v1/${OUTREACH_TABLE}?select=${outreachCols}&order=created_at.desc`, headers),
             fetchAllPages(`${supabaseUrl}/rest/v1/${VAPI_CALL_LOGS}?select=${callCols}&${callFilter}&order=started_at.desc`, headers)
                 .catch(() => [] as any[]),
         ]);
 
-        let totalWaReachouts = 0, totalWaReplies = 0;
-        let totalEmailsSent = 0, totalEmailReplies = 0;
+        // WhatsApp / email numbers use the shared definitions (lib/channel-metrics.ts)
+        // over ALL leads, dated by when the message was sent, not by lead created_at.
+        const range = rangeFromISO(fromISO, toISO);
+        const wa = waStats(allRows, range);
+        const em = emailStats(allRows, range);
+        const totalWaReachouts = wa.uniqueContacted, totalWaReplies = wa.replies;
+        const totalEmailsSent = em.emailsSent, totalEmailReplies = em.replies;
+
         let oldestDate: string | null = null;
         const dailyMap: Record<string, number> = {};
-
         rows.forEach(r => {
-            const hasWa = !!(r.wa_1 || r.wa_2 || r.wa_3 || r.wa_4 || r.wa_5 || r.wa_6 || r.wa_7 || r.wa_8);
-            if (hasWa) totalWaReachouts++;
-            if (isReplyTrackPositive(r.whatsapp_reply_track)) totalWaReplies++;
-
-            for (let n = 1; n <= 8; n++) if (r[`email_${n}`] && isEmailSlotSent(r[`email_${n}_status`])) totalEmailsSent++;
-            if (hasEmailReply(r)) totalEmailReplies++;
-
             const dt = r.created_at;
             if (dt) {
                 if (!oldestDate || dt < oldestDate) oldestDate = dt;

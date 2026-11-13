@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { getDefaultRange } from "@/lib/date-defaults";
 import { Phone, Clock, TrendingUp, Timer, RefreshCw, PhoneMissed, PhoneOff, Info } from "lucide-react";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useEffect, useState } from "react";
@@ -34,11 +36,18 @@ function InfoTooltip({ text }: { text: string }) {
 }
 
 /* ── Apple Metric Tile ── */
-function MetricTile({ title, value, accentColor, icon, info }: {
-    title: string; value: string; accentColor: string; icon: React.ReactNode; info?: string;
+function MetricTile({ title, value, accentColor, icon, info, onClick }: {
+    title: string; value: string; accentColor: string; icon: React.ReactNode; info?: string; onClick?: () => void;
 }) {
     return (
-        <div className="metric-tile" style={{ '--tile-accent': accentColor } as any}>
+        <div
+            className="metric-tile"
+            style={{ '--tile-accent': accentColor, cursor: onClick ? 'pointer' : 'default' } as any}
+            onClick={onClick}
+            role={onClick ? 'link' : undefined}
+            tabIndex={onClick ? 0 : undefined}
+            onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+        >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -80,7 +89,8 @@ function AppleTooltip({ active, payload, label }: any) {
 }
 
 export default function VoiceDashboardPage() {
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const router = useRouter();
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
 
     const { voiceMetrics, loadingVoiceMetrics, refreshVoiceMetrics } = useData();
     const loading = loadingVoiceMetrics;
@@ -173,6 +183,7 @@ export default function VoiceDashboardPage() {
             <div className="metric-grid">
                 <MetricTile
                     title="Total Calls"
+                    onClick={() => router.push('/dashboard/voice/logs')}
                     value={`${(m?.totalCalls ?? 0).toLocaleString()} calls`}
                     accentColor="var(--blue)"
                     icon={<Phone size={17} />}

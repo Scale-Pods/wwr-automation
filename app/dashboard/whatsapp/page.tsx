@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { MessageCircle, Send, Users, MessageSquare, TrendingUp, BarChart3, Building2, Flame, Info } from "lucide-react";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -13,7 +14,8 @@ import {
 } from "@/components/ui/tooltip";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { useRouter } from "next/navigation";
-import { isReplyTrackPositive, parseJsonArray, isInboundMessage, waMessagesSent, isPropertyFinderLead, lastWaActivityDate } from "@/lib/outreach-types";
+import { isPropertyFinderLead } from "@/lib/outreach-types";
+import { waStats, rangeFromDates } from "@/lib/channel-metrics";
 
 function InfoTooltip({ text }: { text: string }) {
     return (
@@ -30,14 +32,6 @@ function InfoTooltip({ text }: { text: string }) {
             </UITooltip>
         </TooltipProvider>
     );
-}
-
-function waActivity(lead: any) {
-    const conv = parseJsonArray(lead.whatsapp_conversation);
-    const sent = waMessagesSent(lead);
-    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
-    const lastDate = lastWaActivityDate(lead);
-    return { sent, replied, lastDate };
 }
 
 /* ── Apple Metric Tile ── */
@@ -93,7 +87,7 @@ function AppleTooltip({ active, payload, label }: any) {
 
 export default function WhatsAppDashboardPage() {
     const router = useRouter();
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
     const [waData, setWaData] = useState<any>(null);
     const [serverMetrics, setServerMetrics] = useState<{ totalPositiveLeads: number } | null>(null);
     const [loading, setLoading] = useState(true);
@@ -128,38 +122,16 @@ export default function WhatsAppDashboardPage() {
     const stats = useMemo(() => {
         if (!waData) return { totalLeads: 0, sentCount: 0, uniqueSentCount: 0, totalReplies: 0, pfLeadCount: 0, dailyTrend: [] as any[] };
         const allLeads = waData.leads || waData.nr_wf || [];
-
-        const from = dateRange?.from ? startOfDay(new Date(dateRange.from)).getTime() : null;
-        const to = endOfDay(new Date(dateRange?.to || dateRange?.from || new Date())).getTime();
-        const inRange = (t: number | null) => !from || (t != null && t >= from && t <= to);
-
-        let sentCount = 0;
-        let totalReplies = 0;
-        let uniqueSentCount = 0;
-        let pfLeadCount = 0;
-        const dailyMap: Record<string, { reachouts: number; replies: number }> = {};
-
-        allLeads.forEach((lead: any) => {
-            const a = waActivity(lead);
-            const t = a.lastDate ? new Date(a.lastDate).getTime() : null;
-            if (!inRange(t)) return;
-
-            uniqueSentCount++;
-            sentCount += a.sent;
-            if (a.replied) totalReplies++;
-            if (isPropertyFinderLead(lead)) pfLeadCount++;
-
-            if (a.lastDate) {
-                const dayKey = new Date(a.lastDate).toISOString().slice(0, 10);
-                if (!dailyMap[dayKey]) dailyMap[dayKey] = { reachouts: 0, replies: 0 };
-                dailyMap[dayKey].reachouts++;
-                if (a.replied) dailyMap[dayKey].replies++;
-            }
-        });
-
-        const dailyTrend = Object.entries(dailyMap).sort(([a], [b]) => a.localeCompare(b)).map(([date, vals]) => ({ date, ...vals }));
-
-        return { totalLeads: allLeads.length, sentCount, uniqueSentCount, totalReplies, pfLeadCount, dailyTrend };
+        // Shared definitions (lib/channel-metrics.ts) — identical on every WhatsApp page and the Master dashboard.
+        const st = waStats(allLeads, rangeFromDates(dateRange?.from, dateRange?.to));
+        return {
+            totalLeads: allLeads.length,
+            sentCount: st.messagesSent,
+            uniqueSentCount: st.uniqueContacted,
+            totalReplies: st.replies,
+            pfLeadCount: st.contactedRows.filter(isPropertyFinderLead).length,
+            dailyTrend: st.daily,
+        };
     }, [waData, dateRange]);
 
     const trendData = useMemo(() => stats.dailyTrend.map(d => ({

@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { Phone, CheckCircle, PhoneIncoming, PhoneOff, PhoneMissed, Info } from "lucide-react";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import {
@@ -41,10 +42,7 @@ function InfoTooltip({ text }: { text: string }) {
 export default function VoiceAnalyticsPage() {
     const { voiceMetrics, loadingVoiceMetrics, refreshVoiceMetrics } = useData();
 
-    const [dateRange, setDateRange] = useState<any>({
-        from: subDays(new Date(), 7),
-        to: new Date(),
-    });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
 
     const loading = loadingVoiceMetrics;
     const m = voiceMetrics;

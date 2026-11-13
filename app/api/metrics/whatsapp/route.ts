@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { OUTREACH_TABLE, isReplyTrackPositive, waMessagesSent, earliestWaSentDate, hasWaSend, isHotWaSentiment } from '@/lib/outreach-types';
+import { OUTREACH_TABLE } from '@/lib/outreach-types';
+import { waStats, rangeFromISO } from '@/lib/channel-metrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,39 +76,15 @@ export async function GET(req: Request) {
             headers
         );
 
-        let reachouts = 0, replies = 0, messagesSent = 0, positiveLeads = 0;
-        const dailyMap: Record<string, { reachouts: number; replies: number }> = {};
-
-        rows.forEach(r => {
-            if (!hasWaSend(r)) return;
-            const dateRef = earliestWaSentDate(r);
-            const t = dateRef ? new Date(dateRef).getTime() : null;
-            if (t == null || t < fromMs || t > toMs) return;
-
-            reachouts++;
-            messagesSent += waMessagesSent(r);
-            if (isHotWaSentiment(r.wa_sentiment)) positiveLeads++;
-
-            const replied = isReplyTrackPositive(r.whatsapp_reply_track);
-            if (replied) replies++;
-
-            const key = new Date(dateRef!).toISOString().slice(0, 10);
-            if (!dailyMap[key]) dailyMap[key] = { reachouts: 0, replies: 0 };
-            dailyMap[key].reachouts++;
-            if (replied) dailyMap[key].replies++;
-        });
-
-        const dailyTrend = Object.entries(dailyMap)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, v]) => ({ date, ...v }));
+        const st = waStats(rows, rangeFromISO(new Date(fromMs).toISOString(), new Date(toMs).toISOString()));
 
         const metrics: WhatsappMetrics = {
-            totalReachouts: reachouts,
-            totalReplies: replies,
-            replyRate: reachouts > 0 ? Math.round((replies / reachouts) * 100) : 0,
-            totalMessagesSent: messagesSent,
-            totalPositiveLeads: positiveLeads,
-            dailyTrend,
+            totalReachouts: st.uniqueContacted,
+            totalReplies: st.replies,
+            replyRate: st.uniqueContacted > 0 ? Math.round((st.replies / st.uniqueContacted) * 100) : 0,
+            totalMessagesSent: st.messagesSent,
+            totalPositiveLeads: st.positiveLeads,
+            dailyTrend: st.daily,
             ownerReachouts: 0,
             ownerReplies: 0,
         };

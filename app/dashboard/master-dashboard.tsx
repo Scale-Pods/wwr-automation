@@ -1,5 +1,7 @@
 "use client";
 
+import { emailStats, waStats, rangeFromDates } from "@/lib/channel-metrics";
+import { getDefaultRange } from "@/lib/date-defaults";
 import {
     Users, Mail, MessageCircle, Phone, TrendingUp, PieChart as PieChartIcon,
     MessageSquare, Inbox, Send, Building2
@@ -88,10 +90,7 @@ function MetricTile({
 }
 
 export default function MasterDashboard() {
-    const [dateRange, setDateRange] = useState<any>({
-        from: subDays(new Date(), 7),
-        to: new Date(),
-    });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
 
     const {
         leads: allLeads, loadingLeads, refreshLeads, calls, loadingCalls, refreshCalls,
@@ -113,7 +112,7 @@ export default function MasterDashboard() {
         if (loadingLeads) return null;
 
         const rangeFrom = dateRange?.from ? new Date(dateRange.from).getTime() : null;
-        const rangeTo = dateRange?.to ? new Date(dateRange.to).getTime() : null;
+        const rangeTo = dateRange?.to ? new Date(dateRange.to).setHours(23, 59, 59, 999) : null;
 
         const inRange = (d: string | null) => {
             if (!d || !rangeFrom || !rangeTo) return true;
@@ -131,34 +130,18 @@ export default function MasterDashboard() {
         allLeads.forEach((lead: any) => {
             if (inRange(lead.created_at)) totalLeads++;
             if (isPropertyFinderLead(lead) && inRange(lead.created_at)) totalPfLeads++;
-
-            // Emails sent — email_slots already only contains slots where email_N
-            // itself has content (see buildEmailSlots), so just count them.
-            totalEmailsSent += (lead.email_slots || []).length;
-            if (lead.email_replied) totalEmailReplies++;
-
-            // WhatsApp reachouts — a lead counts only when it has a real send:
-            // wa_N is not null AND wa_N_status === "sent", for any of wa_1..wa_8.
-            // Date-scoped on the earliest such wa_N_sent_at (Qatar "DD/MM/YYYY HH:MM").
-            const sentSlots = (lead.wa_slots || []).filter(
-                (s: any) => s.n <= 8 && s.message != null && String(s.message).trim() !== '' &&
-                    String(s.status ?? '').trim().toLowerCase() === 'sent'
-            );
-            if (sentSlots.length > 0) {
-                const slotTimes = sentSlots
-                    .map((s: any) => coerceTimestamp(s.sent_at))
-                    .filter(Boolean)
-                    .map((iso: string) => new Date(iso).getTime());
-                const waRefMs = slotTimes.length ? Math.min(...slotTimes) : null;
-                const waRef = waRefMs != null
-                    ? new Date(waRefMs).toISOString()
-                    : (coerceTimestamp(lead.last_activity) || lead.created_at);
-                if (inRange(waRef)) {
-                    totalWaReachouts++;
-                    if (lead.whatsapp_replied) totalWaReplies++;
-                }
-            }
         });
+
+        // Email + WhatsApp numbers come from the shared definitions in
+        // lib/channel-metrics.ts so they match every email / WhatsApp page.
+        const mRange = rangeFromDates(dateRange?.from, dateRange?.to);
+        const rawRows = allLeads.map((l: any) => l.raw || l);
+        const em = emailStats(rawRows, mRange);
+        const wa = waStats(rawRows, mRange);
+        totalEmailsSent = em.emailsSent;
+        totalEmailReplies = em.replies;
+        totalWaReachouts = wa.uniqueContacted;
+        totalWaReplies = wa.replies;
 
         // Voice calls from vapi_call_logs (already date-scoped by refreshCalls)
         let totalVoiceCalls = 0;

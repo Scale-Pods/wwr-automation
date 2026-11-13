@@ -180,16 +180,11 @@ export function isReplyTrackPositive(v: any): boolean {
     return s !== '' && s !== 'no' && s !== 'none' && s !== 'false';
 }
 
-/** email_reply_track is a generic "this lead replied" flag shared across
- *  channels — WhatsApp automations set it too — so it alone isn't proof of an
- *  actual email reply. A real email reply requires the track flag AND a real
- *  email address AND a non-empty parsed email_conversation thread. Use this
- *  wherever "email replies" is counted or filtered, not isReplyTrackPositive
- *  on email_reply_track alone. */
+/** A lead has an email reply when outreach_table.email_reply_track is set
+ *  (anything other than empty / no / none / false) — that column is how real
+ *  replies are tracked. Use this everywhere "email replies" is counted or listed. */
 export function hasEmailReply(lead: any): boolean {
-    if (!isReplyTrackPositive(lead?.email_reply_track)) return false;
-    if (!lead?.email || !String(lead.email).trim()) return false;
-    return parseJsonArray(lead?.email_conversation).length > 0;
+    return isReplyTrackPositive(lead?.email_reply_track);
 }
 
 export function parseJsonArray(raw: any): any[] {
@@ -271,6 +266,23 @@ export function waMessagesSent(row: any): number {
 }
 
 /**
+ * A *_sent_at / call_N_date value only proves something happened when it carries
+ * a clock time or a "- Done" / "- Failed" suffix. A bare "YYYY-MM-DD" is just the
+ * scheduled day of a step that has not run yet.
+ */
+export function isProcessedStamp(v: any): boolean {
+    const s = String(v ?? '').trim();
+    if (!s) return false;
+    return /-\s*(done|failed)\s*$/i.test(s) || /\d{1,2}:\d{2}/.test(s);
+}
+
+/** True when wa_N was actually processed (sent, delivered, read, replied or failed) — not merely scheduled. */
+export function isWaSlotProcessed(row: any, n: number): boolean {
+    if (isProcessedStamp(row?.[`wa_${n}_sent_at`])) return true;
+    return /^(sent|deliver|read|replied|fail)/i.test(String(row?.[`wa_${n}_status`] ?? '').trim());
+}
+
+/**
  * The wa_1..wa_8 slots that are a genuine outbound send: wa_N is not null AND
  * wa_N_status is "sent". Returns the slot metadata (with its sent_at) so callers
  * can date-scope on wa_N_sent_at.
@@ -280,7 +292,7 @@ export function waSentSlots(row: any): { n: number; message: string; status: str
     for (let n = 1; n <= 8; n++) {
         const message = row?.[`wa_${n}`];
         const status = String(row?.[`wa_${n}_status`] ?? '').trim().toLowerCase();
-        if (message != null && String(message).trim() !== '' && status === 'sent') {
+        if (message != null && String(message).trim() !== '' && (/^(sent|deliver|read|replied)/.test(status) || /-\s*done\s*$/i.test(String(row?.[`wa_${n}_sent_at`] ?? '')))) {
             out.push({ n, message: String(message), status: 'sent', sent_at: row?.[`wa_${n}_sent_at`] ?? null });
         }
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import {
     Send,
@@ -50,10 +51,7 @@ function InfoTooltip({ text }: { text: string }) {
 
 export default function EmailAnalyticsPage() {
     const [board, setBoard] = useState<EmailBoardKey>("all");
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({
-        from: subDays(new Date(), 30),
-        to: new Date(),
-    });
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultRange());
     const [metrics, setMetrics] = useState<EmailMetrics | null>(null);
     const [loadingLeads, setLoadingLeads] = useState(true);
 

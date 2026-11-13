@@ -1,8 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { MessageCircle, Mic, Copy, Wallet, Phone, BarChart3, Mail, Check } from "lucide-react";
+import { MessageCircle, Mic, Copy, Wallet, Phone, BarChart3, Check } from "lucide-react";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
@@ -10,29 +9,34 @@ import { useData } from "@/context/DataContext";
 const VAPI_ACCOUNTS = [
     {
         label: "WWR Commercial",
+        vapiLabel: "wwr-commercial",
         email: "rizwan@wwrqatar.com",
         endpointUrl: "sip:wwrxscalepods_support_2026@sip.vapi.ai",
-        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-2-495116172944.europe-west3.run.app/assistant-selector",
+        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-2-588249993033.europe-west3.run.app/assistant-selector",
         assistantId: "ec46b36b-6eba-45d0-bfdc-5eb1c39f75da",
         phone: "+97440197787",
     },
     {
         label: "WWR Residential",
+        vapiLabel: "wwr residential",
         email: "sales@wwrqatar.com",
         endpointUrl: "sip:wwrxscalepods_support_2026_second@sip.vapi.ai",
-        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-1-495116172944.europe-west3.run.app/assistant-selector",
+        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-1-588249993033.europe-west3.run.app/assistant-selector",
         assistantId: "8bb8b584-1307-4e97-996c-360cfc40c892",
         phone: "+97440196942",
     },
     {
         label: "WWR Business",
+        vapiLabel: "wwr business",
         email: "info@wwrqatar.com",
         endpointUrl: "sip:wwrxscalepods_support_2026_third@sip.vapi.ai",
-        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-3-495116172944.europe-west1.run.app/assistant-selector",
+        assistantSelectorUrl: "https://vapi-maqsam-bridge-wwr-3-588249993033.europe-west3.run.app/assistant-selector",
         assistantId: "79a32791-27b0-46d2-91ed-bc0fecc46eae",
         phone: "+97440197754",
     },
 ];
+
+type VapiAccount = typeof VAPI_ACCOUNTS[number];
 
 const WHATSAPP_NUMBER = "+97430020275";
 
@@ -46,130 +50,101 @@ export default function CredentialsPage() {
     }, [calls]);
 
     return (
-        <div className="space-y-6 pb-10 max-w-5xl mx-auto">
+        <div className="space-y-4 pb-6 max-w-6xl mx-auto">
             <div>
                 <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: 'var(--ls-heading)', color: 'var(--label-primary)' }}>Credentials Management</h1>
                 <p style={{ fontSize: 13, color: 'var(--label-secondary)', marginTop: 2 }}>View your active integrations and manageable accounts.</p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
-                {/* WhatsApp Section */}
+            {/* Top cards: compact, equal height, stack on small screens */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
                 <CredentialSection
                     title="WhatsApp Business API"
                     description="Meta Business API credentials for WhatsApp CRM."
                     icon={MessageCircle}
-                    iconColor="text-emerald-600"
-                    iconBg="bg-emerald-50/10"
+                    tileClass="bg-emerald-500/10 text-emerald-400"
                 >
-                    <div className="grid gap-4">
-                        <ReadOnlyField label="WhatsApp Number" value={WHATSAPP_NUMBER} />
-                    </div>
+                    <Field label="WhatsApp Number" value={WHATSAPP_NUMBER} />
                 </CredentialSection>
 
-                {/* Voice Section */}
                 <CredentialSection
                     title="Voice Agent (Vapi)"
-                    description="AI Voice configuration and lifetime cost."
+                    description="AI voice configuration and lifetime cost."
                     icon={Mic}
-                    iconColor="text-blue-600"
-                    iconBg="bg-blue-50/10"
+                    tileClass="bg-blue-500/10 text-blue-400"
                 >
-                    <div className="space-y-4">
-                        <div className="bg-[var(--fill-quaternary)] rounded-lg p-4 border border-[var(--glass-border)] flex items-center justify-between shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-[var(--fill-secondary)] rounded-md border border-[var(--glass-border)]">
-                                    <Mic className="h-5 w-5 text-blue-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-[var(--label-primary)]">Vapi Integration</p>
-                                    <p className="text-xs text-[var(--label-tertiary)]">Lifetime Consumption</p>
-                                </div>
+                    <div className="flex flex-col gap-3">
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="text-[13px] font-semibold text-[var(--label-primary)]">Vapi Integration</p>
+                                <p className="text-[11px] text-slate-400">Lifetime Consumption</p>
                             </div>
-                            <div className="text-right">
-                                <p className="text-2xl font-black text-blue-600">
-                                    ${vapiAgentUsed.toFixed(2)}
-                                </p>
-                            </div>
+                            <p className="text-xl font-semibold tabular-nums text-blue-400 shrink-0">${vapiAgentUsed.toFixed(2)}</p>
                         </div>
-
-                        <div className="flex items-center gap-2 pt-2">
-                            <Button variant="outline" size="sm" className="flex-1 border-[var(--glass-border)] text-[var(--label-primary)] hover:bg-[var(--fill-secondary)] text-xs h-9 gap-1.5" onClick={() => router.push('/dashboard/voice/logs')}>
-                                <BarChart3 className="h-3.5 w-3.5" />
-                                Call Logs
+                        <div className="grid grid-cols-2 gap-2">
+                            <Button
+                                variant="outline"
+                                className="h-8 w-full px-3 gap-1.5 text-xs rounded-lg border-white/10 text-[var(--label-primary)] hover:bg-white/[0.06]"
+                                onClick={() => router.push('/dashboard/voice/logs')}
+                            >
+                                <BarChart3 className="h-3.5 w-3.5" /> Call Logs
                             </Button>
-                            <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 gap-1.5" onClick={() => window.open('https://dashboard.vapi.ai/login', '_blank')}>
-                                <Wallet className="h-3.5 w-3.5" />
-                                Vapi Wallet
+                            <Button
+                                className="h-8 w-full px-3 gap-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={() => window.open('https://dashboard.vapi.ai/login', '_blank')}
+                            >
+                                <Wallet className="h-3.5 w-3.5" /> Vapi Wallet
                             </Button>
                         </div>
                     </div>
                 </CredentialSection>
-
-                {/* Voice Agent Accounts Section — spans full width, 3 accounts */}
-                <CredentialSection
-                    title="Voice Agent Accounts"
-                    description="Vapi/Maqsam SIP endpoints per board, with their assistant IDs and phone lines."
-                    icon={Phone}
-                    iconColor="text-cyan-600"
-                    iconBg="bg-cyan-50/10"
-                    className="md:col-span-2"
-                >
-                    <div className="grid gap-4 md:grid-cols-3">
-                        {VAPI_ACCOUNTS.map(acc => (
-                            <VapiAccountCard key={acc.assistantId} account={acc} />
-                        ))}
-                    </div>
-                </CredentialSection>
-
             </div>
-        </div>
-    );
-}
 
-function VapiAccountCard({ account }: { account: typeof VAPI_ACCOUNTS[number] }) {
-    return (
-        <div className="bg-[var(--fill-quaternary)] rounded-xl border border-[var(--glass-border)] p-4 space-y-3">
-            <div>
-                <p className="text-sm font-bold text-[var(--label-primary)]">{account.label}</p>
-                <p className="text-[11px] text-[var(--label-tertiary)] mt-0.5 flex items-center gap-1.5">
-                    <Mail className="h-3 w-3" /> {account.email}
-                </p>
-            </div>
-            <div className="space-y-3">
-                <ReadOnlyField label="Endpoint URL" value={account.endpointUrl} mono small />
-                <ReadOnlyField label="Assistant Selector" value={account.assistantSelectorUrl} mono small />
-                <ReadOnlyField label="Assistant ID" value={account.assistantId} mono small />
-                <ReadOnlyField label="Phone Number" value={account.phone} mono small />
-            </div>
-        </div>
-    );
-}
-
-function CredentialSection({ title, description, icon: Icon, iconColor, iconBg, children, className }: any) {
-    return (
-        <div className={`liquid-card overflow-hidden ${className || ""}`} style={{ padding: 0 }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--separator)', background: 'var(--fill-quaternary)' }}>
-                <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-lg ${iconBg} ${iconColor}`}>
-                        <Icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                        <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--label-primary)' }}>{title}</h2>
-                        <p style={{ fontSize: 11, color: 'var(--label-secondary)', marginTop: 1 }}>{description}</p>
-                    </div>
+            {/* Voice agent accounts: one card per account, side by side — everything visible, nothing scrolls */}
+            <CredentialSection
+                title="Voice Agent Accounts"
+                description="Vapi/Maqsam SIP endpoints per board, with their assistant IDs and phone lines."
+                icon={Phone}
+                tileClass="bg-sky-500/10 text-sky-400"
+            >
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                    {VAPI_ACCOUNTS.map(acc => <AccountCard key={acc.assistantId} account={acc} />)}
                 </div>
+            </CredentialSection>
+        </div>
+    );
+}
+
+function AccountCard({ account }: { account: VapiAccount }) {
+    return (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2.5 min-w-0">
+            <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[13px] font-semibold text-[var(--label-primary)]">{account.label}</span>
+                <span className="text-[11px] font-mono text-slate-500">{account.vapiLabel}</span>
             </div>
-            <div style={{ padding: 20 }}>
-                {children}
+            <Field label="Vapi Email" value={account.email} mono={false} compact />
+            <Field label="Endpoint URL" value={account.endpointUrl} compact />
+            <Field label="Assistant ID" value={account.assistantId} compact />
+            <Field label="Phone" value={account.phone} compact />
+            <Field label="Assistant Selector" value={account.assistantSelectorUrl} compact />
+        </div>
+    );
+}
+
+function Field({ label, value, mono = true, compact }: { label: string; value: string; mono?: boolean; compact?: boolean }) {
+    return (
+        <div className="min-w-0">
+            <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">{label}</span>
+            <div className={`rounded-lg border border-white/10 bg-white/[0.03] ${compact ? "px-2.5 py-1.5" : "px-3 py-2"}`}>
+                <CopyCell value={value} mono={mono} />
             </div>
         </div>
     );
 }
 
-function ReadOnlyField({ label, value, isPassword, mono, small }: { label: string, value: string, isPassword?: boolean, mono?: boolean, small?: boolean }) {
-    const [show, setShow] = useState(false);
+/** A single-line value (ellipsis + full value on hover) with a fixed copy button on the right. */
+function CopyCell({ value, mono = true }: { value: string; mono?: boolean }) {
     const [copied, setCopied] = useState(false);
-    const displayValue = isPassword && !show ? "••••••••••••••••••••••••" : value;
 
     const handleCopy = () => {
         navigator.clipboard.writeText(value);
@@ -178,23 +153,47 @@ function ReadOnlyField({ label, value, isPassword, mono, small }: { label: strin
     };
 
     return (
-        <div className="space-y-1">
-            <Label className="text-[10px] font-bold text-[var(--label-tertiary)] uppercase tracking-wider">{label}</Label>
-            <div className="relative group">
-                <div className={`flex items-start gap-2 w-full rounded-md border border-[var(--glass-border)] bg-[var(--fill-tertiary)] px-3 text-[var(--label-primary)] shadow-sm ${small ? "py-1.5 text-[11px]" : "py-1.5 text-xs"}`}>
-                    <span className={`flex-1 min-w-0 break-all ${mono ? "font-mono" : "font-sans"}`}>
-                        {displayValue}
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 flex-shrink-0 mt-0.5 text-[var(--label-secondary)] hover:text-[var(--label-primary)] opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={handleCopy}
-                    >
-                        {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-                    </Button>
-                </div>
-            </div>
+        <div className="grid items-center gap-2 w-full" style={{ gridTemplateColumns: "minmax(0, 1fr) 24px" }}>
+            <span
+                className={`block overflow-hidden text-ellipsis whitespace-nowrap text-xs font-normal text-slate-300 ${mono ? "font-mono" : ""}`}
+                title={value}
+            >
+                {value}
+            </span>
+            <button
+                type="button"
+                onClick={handleCopy}
+                aria-label={copied ? `Copied ${value}` : `Copy ${value}`}
+                title={copied ? "Copied" : "Copy"}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white/10 hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors"
+            >
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
         </div>
+    );
+}
+
+function CredentialSection({ title, description, icon: Icon, tileClass, children }: {
+    title: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
+    tileClass: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section className="liquid-card h-full flex flex-col overflow-hidden rounded-2xl border border-white/10" style={{ padding: 0 }}>
+            <header className="flex items-center gap-2.5 px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tileClass}`}>
+                    <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                    <h2 className="text-[13px] font-semibold text-[var(--label-primary)]">{title}</h2>
+                    <p className="text-[11px] text-slate-400">{description}</p>
+                </div>
+            </header>
+            <div className="flex-1 p-4">
+                {children}
+            </div>
+        </section>
     );
 }

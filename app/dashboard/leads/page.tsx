@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { getDefaultRange } from "@/lib/date-defaults";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -19,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { useData } from "@/context/DataContext";
+import { consolidateLeads } from "@/lib/leads-utils";
 import type { OutreachLead } from "@/lib/outreach-types";
 
 // ── Progress model: a lead's outreach journey across channels ────────────────
@@ -27,39 +28,51 @@ import type { OutreachLead } from "@/lib/outreach-types";
 // Call day 3/9/15/21/27/30 — 17 steps total. Position within a channel (1st
 // WhatsApp send, 2nd WhatsApp send, ...) maps to wa_N/email_N/call_N in order.
 //
-// A step only counts as done when the slot shows an actual send, not just a
-// scheduled/placeholder date: wa_N_sent_at / email_N_sent_at hold plain future
-// dates for not-yet-sent slots and only get a "- Done" suffix once sent; wa/email
-// status is "sent"/"delivered"/"read" once sent; call_N_status holds free text
-// like "Sent - D1 - Commercial" once the call went out.
-const SENT_STATUS_RE = /sent|deliver|read/i;
-const DONE_SUFFIX_RE = /done/i;
+// A step counts only once it has actually been processed. A bare "YYYY-MM-DD"
+// in wa_N_sent_at / email_N_sent_at / call_N_date is just the SCHEDULED day.
+//   WhatsApp: wa_N_sent_at carries a time or a "- Done" suffix
+//     ("2026-11-07 10:07 - Done", "03/11/2026, 10:21:54").
+//   Email: email_N_sent_at ends in "- Done" / "- Failed" or carries a time
+//     ("2026-11-04 11:01 - Done", "2026-11-04 - Failed") — the slot was processed.
+//   Call: call_N_date is a full timestamp ("2026-11-05T10:04:11.455+03:00"),
+//     written when the call connected/ended; or the call has a sentiment, note or
+//     recording (inbound calls arrive with no date).
+const HAS_TIME_RE = /\d{1,2}:\d{2}/;
+const PROCESSED_SUFFIX_RE = /-\s*(done|failed)\s*$/i;
 
-function waOrEmailSlotSent(s: { status: string | null; sent_at: string | null }): boolean {
-    return SENT_STATUS_RE.test(s.status || "") || DONE_SUFFIX_RE.test(s.sent_at || "");
+function rawOf(l: OutreachLead): Record<string, any> { return (l as any).raw || l; }
+function waDone(l: OutreachLead, n: number): boolean {
+    const at = String(rawOf(l)[`wa_${n}_sent_at`] ?? "").trim();
+    return PROCESSED_SUFFIX_RE.test(at) || HAS_TIME_RE.test(at);
 }
-function callSlotSent(s: { status: string | null }): boolean {
-    return SENT_STATUS_RE.test(s.status || "");
+function emailDone(l: OutreachLead, n: number): boolean {
+    const at = String(rawOf(l)[`email_${n}_sent_at`] ?? "").trim();
+    return PROCESSED_SUFFIX_RE.test(at) || HAS_TIME_RE.test(at);
+}
+function callDone(l: OutreachLead, n: number): boolean {
+    const r = rawOf(l);
+    if (HAS_TIME_RE.test(String(r[`call_${n}_date`] ?? ""))) return true;
+    return !!(r[`call_${n}_sentiment`] || r[`call_${n}_note`] || r[`call_recording_${n}`]);
 }
 
 const JOURNEY_STEPS: { key: string; label: string; day: number; test: (l: OutreachLead) => boolean }[] = [
-    { key: "wa1", label: "WhatsApp (Day 1)", day: 1, test: l => !!l.wa_slots.find(s => s.n === 1 && waOrEmailSlotSent(s)) },
-    { key: "em1", label: "Email (Day 2)", day: 2, test: l => !!l.email_slots.find(s => s.n === 1 && waOrEmailSlotSent(s)) },
-    { key: "c1", label: "Voice Call (Day 3)", day: 3, test: l => !!l.call_slots.find(s => s.n === 1 && callSlotSent(s)) },
-    { key: "wa2", label: "WhatsApp (Day 5)", day: 5, test: l => !!l.wa_slots.find(s => s.n === 2 && waOrEmailSlotSent(s)) },
-    { key: "em2", label: "Email (Day 7)", day: 7, test: l => !!l.email_slots.find(s => s.n === 2 && waOrEmailSlotSent(s)) },
-    { key: "c2", label: "Voice Call (Day 9)", day: 9, test: l => !!l.call_slots.find(s => s.n === 2 && callSlotSent(s)) },
-    { key: "wa3", label: "WhatsApp (Day 11)", day: 11, test: l => !!l.wa_slots.find(s => s.n === 3 && waOrEmailSlotSent(s)) },
-    { key: "em3", label: "Email (Day 13)", day: 13, test: l => !!l.email_slots.find(s => s.n === 3 && waOrEmailSlotSent(s)) },
-    { key: "c3", label: "Voice Call (Day 15)", day: 15, test: l => !!l.call_slots.find(s => s.n === 3 && callSlotSent(s)) },
-    { key: "wa4", label: "WhatsApp (Day 17)", day: 17, test: l => !!l.wa_slots.find(s => s.n === 4 && waOrEmailSlotSent(s)) },
-    { key: "em4", label: "Email (Day 19)", day: 19, test: l => !!l.email_slots.find(s => s.n === 4 && waOrEmailSlotSent(s)) },
-    { key: "c4", label: "Voice Call (Day 21)", day: 21, test: l => !!l.call_slots.find(s => s.n === 4 && callSlotSent(s)) },
-    { key: "wa5", label: "WhatsApp (Day 23)", day: 23, test: l => !!l.wa_slots.find(s => s.n === 5 && waOrEmailSlotSent(s)) },
-    { key: "em5", label: "Email (Day 25)", day: 25, test: l => !!l.email_slots.find(s => s.n === 5 && waOrEmailSlotSent(s)) },
-    { key: "c5", label: "Voice Call (Day 27)", day: 27, test: l => !!l.call_slots.find(s => s.n === 5 && callSlotSent(s)) },
-    { key: "wa6", label: "WhatsApp (Day 29)", day: 29, test: l => !!l.wa_slots.find(s => s.n === 6 && waOrEmailSlotSent(s)) },
-    { key: "c6", label: "Voice Call (Day 30)", day: 30, test: l => !!l.call_slots.find(s => s.n === 6 && callSlotSent(s)) },
+    { key: "wa1", label: "WhatsApp (Day 1)", day: 1, test: l => waDone(l, 1) },
+    { key: "em1", label: "Email (Day 2)", day: 2, test: l => emailDone(l, 1) },
+    { key: "c1", label: "Voice Call (Day 3)", day: 3, test: l => callDone(l, 1) },
+    { key: "wa2", label: "WhatsApp (Day 5)", day: 5, test: l => waDone(l, 2) },
+    { key: "em2", label: "Email (Day 7)", day: 7, test: l => emailDone(l, 2) },
+    { key: "c2", label: "Voice Call (Day 9)", day: 9, test: l => callDone(l, 2) },
+    { key: "wa3", label: "WhatsApp (Day 11)", day: 11, test: l => waDone(l, 3) },
+    { key: "em3", label: "Email (Day 13)", day: 13, test: l => emailDone(l, 3) },
+    { key: "c3", label: "Voice Call (Day 15)", day: 15, test: l => callDone(l, 3) },
+    { key: "wa4", label: "WhatsApp (Day 17)", day: 17, test: l => waDone(l, 4) },
+    { key: "em4", label: "Email (Day 19)", day: 19, test: l => emailDone(l, 4) },
+    { key: "c4", label: "Voice Call (Day 21)", day: 21, test: l => callDone(l, 4) },
+    { key: "wa5", label: "WhatsApp (Day 23)", day: 23, test: l => waDone(l, 5) },
+    { key: "em5", label: "Email (Day 25)", day: 25, test: l => emailDone(l, 5) },
+    { key: "c5", label: "Voice Call (Day 27)", day: 27, test: l => callDone(l, 5) },
+    { key: "wa6", label: "WhatsApp (Day 29)", day: 29, test: l => waDone(l, 6) },
+    { key: "c6", label: "Voice Call (Day 30)", day: 30, test: l => callDone(l, 6) },
 ];
 
 function ProgressBreakdown({ lead }: { lead: OutreachLead }) {
@@ -128,11 +141,9 @@ function ProgressBreakdown({ lead }: { lead: OutreachLead }) {
 }
 
 export default function LeadsPage() {
-    const {
-        leads, loadingLeads, refreshLeads,
-        masterLeadsTotal, loadingMasterLeadsTotal, refreshMasterLeadsTotal,
-    } = useData();
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 30), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
+    const [leads, setLeads] = useState<OutreachLead[]>([]);
+    const [loadingLeads, setLoadingLeads] = useState(true);
     const [templates, setTemplates] = useState<any[]>([]);
     const [view, setView] = useState<"leads" | "templates">("leads");
     const [templateFilter, setTemplateFilter] = useState<"email" | "whatsapp">("email");
@@ -147,12 +158,17 @@ export default function LeadsPage() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [view, templateFilter, searchQuery, statusFilter, channelFilter, stageFilter]);
+    }, [view, templateFilter, searchQuery, statusFilter, channelFilter, stageFilter, dateRange]);
 
-    useEffect(() => {
-        if (!dateRange?.from) return;
-        refreshMasterLeadsTotal({ from: dateRange.from, to: dateRange.to || dateRange.from });
-    }, [dateRange, refreshMasterLeadsTotal]);
+    // Changing page: bring the card header back into view instead of leaving the
+    // scroll position wherever the longer/shorter page left it.
+    const cardTopRef = useRef<HTMLDivElement>(null);
+    const goToPage = (p: number) => {
+        setCurrentPage(p);
+        requestAnimationFrame(() => {
+            cardTopRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+        });
+    };
 
     const loading = view === "leads" ? loadingLeads : false;
 
@@ -178,8 +194,36 @@ export default function LeadsPage() {
         return Array.from(set).sort();
     }, [leads]);
 
+    // Leads come straight from outreach_table, filtered server-side on created_at
+    // for the selected range. "Total Leads" is the row count of that same query,
+    // so the badge and the table can never disagree.
+    const fetchLeadsInRange = async () => {
+        if (!dateRange?.from) return;
+        setLoadingLeads(true);
+        try {
+            const start = new Date(dateRange.from); start.setHours(0, 0, 0, 0);
+            const end = new Date(dateRange.to || dateRange.from); end.setHours(23, 59, 59, 999);
+            const qs = new URLSearchParams({ from: start.toISOString(), to: end.toISOString() });
+            const res = await fetch(`/api/leads?${qs.toString()}`, { cache: "no-store" });
+            if (!res.ok) throw new Error("Failed to fetch leads");
+            setLeads(consolidateLeads(await res.json()));
+        } catch (err) {
+            console.error(err);
+            setError("Could not load leads. Please try again later.");
+        } finally {
+            setLoadingLeads(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLeadsInRange();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRange]);
+
+    const dateScopedLeads = leads;
+
     const filteredLeads = useMemo(() => {
-        return (leads as OutreachLead[]).filter(lead => {
+        return dateScopedLeads.filter(lead => {
             if (searchQuery) {
                 const s = searchQuery.toLowerCase();
                 const match = lead.name?.toLowerCase().includes(s)
@@ -213,7 +257,7 @@ export default function LeadsPage() {
 
             return true;
         });
-    }, [leads, searchQuery, statusFilter, channelFilter, stageFilter]);
+    }, [dateScopedLeads, searchQuery, statusFilter, channelFilter, stageFilter]);
 
     if (error) {
         return (
@@ -237,23 +281,19 @@ export default function LeadsPage() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     {view === "leads" && <DateRangePicker onUpdate={({ range }) => setDateRange(range)} />}
-                    <div style={{ display: "flex", background: "var(--fill-tertiary)", borderRadius: "var(--radius-md)", padding: 3, gap: 2 }}>
-                        <button onClick={() => setView("leads")} style={{ padding: "5px 14px", borderRadius: "var(--radius-sm)", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: view === "leads" ? "var(--bg-layer1)" : "transparent", color: view === "leads" ? "var(--label-primary)" : "var(--label-secondary)", boxShadow: view === "leads" ? "var(--shadow-sm)" : "none" }}>Leads</button>
-                        <button onClick={() => setView("templates")} style={{ padding: "5px 14px", borderRadius: "var(--radius-sm)", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", background: view === "templates" ? "var(--bg-layer1)" : "transparent", color: view === "templates" ? "var(--label-primary)" : "var(--label-secondary)", boxShadow: view === "templates" ? "var(--shadow-sm)" : "none" }}>Templates</button>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => view === "leads" ? refreshLeads({ force: true }) : fetchTemplates()} className="border-[var(--glass-border)] bg-[var(--fill-tertiary)] hover:bg-[var(--fill-secondary)] text-[var(--label-primary)] h-9">
+                    <Button variant="outline" size="sm" onClick={() => view === "leads" ? fetchLeadsInRange() : fetchTemplates()} className="border-[var(--glass-border)] bg-[var(--fill-tertiary)] hover:bg-[var(--fill-secondary)] text-[var(--label-primary)] h-9">
                         <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
                         Refresh
                     </Button>
                     <div style={{ background: "var(--fill-secondary)", border: "1px solid var(--glass-border)", padding: "6px 12px", borderRadius: "var(--radius-md)", fontSize: 13, fontWeight: 500, color: "var(--label-secondary)" }}>
                         {view === "leads"
-                            ? `Total Leads: ${loadingMasterLeadsTotal && masterLeadsTotal == null ? "…" : (masterLeadsTotal ?? leads.length).toLocaleString()}`
+                            ? `Total Leads: ${loadingLeads && leads.length === 0 ? "…" : dateScopedLeads.length.toLocaleString()}`
                             : `Templates: ${templates.length}`}
                     </div>
                 </div>
             </div>
 
-            <div className="liquid-card" style={{ padding: 0, overflow: "hidden" }}>
+            <div ref={cardTopRef} className="liquid-card" style={{ padding: 0, overflow: "hidden", scrollMarginTop: 72 }}>
                 <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--separator)" }}>
                     <div className="flex items-center gap-2">
                         {view === "leads" ? <Users className="h-5 w-5 text-[var(--blue)]" /> : <AlertCircle className="h-5 w-5 text-[var(--purple)]" />}
@@ -391,10 +431,10 @@ export default function LeadsPage() {
                                     </TableBody>
                                 </Table>
                             </div>
-                            <PaginationFooter totalItems={filteredLeads.length} currentPage={currentPage} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
+                            <PaginationFooter totalItems={filteredLeads.length} currentPage={currentPage} itemsPerPage={itemsPerPage} onPageChange={goToPage} />
                         </>
                     ) : (
-                        <div className="p-6 space-y-6">
+                        <div className="p-3 sm:p-5 space-y-4">
                             <div className="flex justify-center">
                                 <div className="bg-[var(--fill-tertiary)] p-1 rounded-lg inline-flex items-center gap-1">
                                     <Button variant="ghost" size="sm" onClick={() => setTemplateFilter("email")} className={`text-xs h-8 px-4 rounded-md transition-all ${templateFilter === "email" ? "bg-[var(--bg-layer1)] text-[var(--label-primary)] shadow-sm font-semibold" : "text-[var(--label-secondary)] hover:text-[var(--label-primary)]"}`}>Email Templates</Button>
@@ -405,29 +445,29 @@ export default function LeadsPage() {
                                 <div className="text-center text-[var(--label-secondary)] py-10">No {templateFilter} templates found.</div>
                             ) : (
                                 <>
-                                    <div className="grid grid-cols-1 gap-6 max-w-4xl mx-auto">
+                                    <div className="grid grid-cols-1 gap-3 sm:gap-4 max-w-3xl mx-auto w-full">
                                         {templates.filter(t => t.type === templateFilter).slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((template: any, idx) => (
                                             <div key={template.id || idx} className="liquid-card border-none overflow-hidden" style={{ padding: 0 }}>
-                                                <div style={{ background: "var(--fill-quaternary)", borderBottom: "1px solid var(--separator)", padding: "12px 16px", display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`p-2 rounded-md ${template.type === "email" ? "bg-[var(--blue)]/10 text-[var(--blue)]" : "bg-[var(--green)]/10 text-[var(--green)]"}`}>
+                                                <div style={{ background: "var(--fill-quaternary)", borderBottom: "1px solid var(--separator)", padding: "10px 14px", display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div className={`p-1.5 rounded-md shrink-0 ${template.type === "email" ? "bg-[var(--blue)]/10 text-[var(--blue)]" : "bg-[var(--green)]/10 text-[var(--green)]"}`}>
                                                             {template.type === "email" ? <Mail className="h-4 w-4" /> : <MessageCircle className="h-4 w-4" />}
                                                         </div>
-                                                        <div className="font-semibold text-[var(--label-primary)]">{template.name || `Template ${idx + 1}`}</div>
+                                                        <div className="font-semibold text-[13px] text-[var(--label-primary)] truncate">{template.name || `Template ${idx + 1}`}</div>
                                                     </div>
                                                     {template.category && (
                                                         <Badge variant="secondary" className="text-xs bg-[var(--fill-secondary)] border border-[var(--glass-border)] text-[var(--label-secondary)] shadow-none">{template.category}</Badge>
                                                     )}
                                                 </div>
-                                                <div className="p-6 bg-transparent">
-                                                    <div className="whitespace-pre-wrap text-[var(--label-secondary)] font-sans leading-relaxed">
+                                                <div className="px-4 py-3 bg-transparent">
+                                                    <div className="whitespace-pre-wrap break-words text-[12.5px] text-[var(--label-secondary)] font-sans leading-relaxed max-h-60 overflow-y-auto custom-scrollbar">
                                                         {typeof template.body === "string" ? template.body : JSON.stringify(template, null, 2)}
                                                     </div>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-                                    <PaginationFooter totalItems={templates.filter(t => t.type === templateFilter).length} currentPage={currentPage} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
+                                    <PaginationFooter totalItems={templates.filter(t => t.type === templateFilter).length} currentPage={currentPage} itemsPerPage={itemsPerPage} onPageChange={goToPage} />
                                 </>
                             )}
                         </div>

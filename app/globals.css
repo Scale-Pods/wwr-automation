@@ -1354,7 +1354,7 @@ img, video, canvas, svg { max-width: 100%; }
 @media (min-width: 900px) { .filter-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 /* Dialogs / popups never exceed the viewport and scroll internally when tall */
-[role="dialog"] {
+:where([role="dialog"]) {
     max-width: calc(100vw - 16px);
     max-height: 92dvh;
 }
@@ -1363,11 +1363,53 @@ img, video, canvas, svg { max-width: 100%; }
     /* Fixed-width form controls shrink to fit */
     button[role="combobox"], .dashboard-main input, .dashboard-main select { max-width: 100%; }
     /* Tighter padding for cards and dialogs on phones */
-    [role="dialog"].apple-dialog { padding: 16px; border-radius: 20px; }
+    [role="dialog"].apple-dialog:not(.p-0) { padding: 16px; }
+    [role="dialog"].apple-dialog { border-radius: 20px; }
     .dashboard-main h1 { font-size: 22px !important; }
     /* Table cells: a bit denser so more fits before horizontal scroll */
     .dashboard-main table th, .dashboard-main table td { padding-left: 10px; padding-right: 10px; }
     /* Popovers (date picker etc.) stay on-screen */
     [data-radix-popper-content-wrapper] { max-width: 100vw; }
     .rdp { max-width: calc(100vw - 32px); overflow-x: auto; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile polish (<1024px): Powered-by, assistant launcher, charts
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 1023px) {
+    /* Drawer "Powered by ScalePods": larger + higher contrast so it reads clearly */
+    .powered-by { gap: 6px !important; margin-top: 14px !important; }
+    .powered-by-label { font-size: 12px !important; color: var(--label-secondary) !important; }
+    .powered-by-logo { width: 140px !important; height: 44px !important; }
+
+    /* Insights assistant: small icon button in the top-right of the top bar
+       instead of a big floating button that covers page controls */
+    .insights-launcher {
+        top: 10px !important; bottom: auto !important; right: 14px !important;
+        width: 36px !important; height: 36px !important; border-radius: 10px !important;
+        z-index: 185 !important;
+        box-shadow: 0 2px 8px rgba(10,132,255,0.35) !important;
+    }
+    .insights-launcher svg { width: 18px !important; height: 18px !important; }
+    .insights-panel {
+        top: 64px !important; bottom: 12px !important; right: 8px !important; left: 8px !important;
+        width: auto !important; height: auto !important; z-index: 185 !important;
+    }
+}
+
+@media (max-width: 640px) {
+    /* Give charts more horizontal room */
+    .dashboard-main { padding-left: 10px !important; padding-right: 10px !important; }
+    .charts-grid .liquid-card, .charts-grid-2-1 .liquid-card {
+        padding-left: 10px !important; padding-right: 10px !important;
+    }
+    .dashboard-main .recharts-responsive-container { width: 100% !important; }
+}
+
+/* Select dropdowns must be opaque — the translucent glass fill let the table show through */
+[role="listbox"].apple-dialog {
+    background: var(--bg-layer2) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    z-index: 100;
 }

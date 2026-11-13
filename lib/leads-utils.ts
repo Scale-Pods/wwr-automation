@@ -100,17 +100,13 @@ export function normalizeOutreachRow(r: any): OutreachLead {
             return role === 'user' || role === 'User' || role === 'customer';
         });
 
-    // email_reply_track is a generic "this lead replied" flag shared across
-    // channels (WhatsApp automations set it too), so it alone isn't proof of
-    // an actual email reply — require a real email address as well.
-    const hasRealEmail = !!r.email && String(r.email).trim() !== '';
-    const emailReplied = hasRealEmail && (
-        hasEmailReply(r)
+    // email_reply_track is the source of truth for email replies; an inbound
+    // message in email_conversation also counts.
+    const emailReplied = hasEmailReply(r)
         || emailConversation.some((m: any) => {
             const role = m?.role || m?.direction || m?.type;
             return role === 'user' || role === 'inbound' || role === 'received';
-        })
-    );
+        });
 
     const callReplied = isReplyTrackPositive(r.call_reply_track);
 

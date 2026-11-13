@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
@@ -11,21 +12,10 @@ import {
 } from "@/components/ui/tooltip";
 import { subDays, startOfDay, endOfDay, format } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { isReplyTrackPositive, parseJsonArray, isInboundMessage, waMessagesSent, lastWaActivityDate } from "@/lib/outreach-types";
-
-function waActivity(lead: any) {
-    const conv = parseJsonArray(lead.whatsapp_conversation);
-    const sent = waMessagesSent(lead);
-    const replied = isReplyTrackPositive(lead.whatsapp_reply_track) || conv.some(isInboundMessage);
-    const lastDate = lastWaActivityDate(lead);
-    return { sent, replied, lastDate };
-}
+import { waStats, rangeFromDates } from "@/lib/channel-metrics";
 
 export default function WhatsappAnalyticsPage() {
-    const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-        from: subDays(new Date(), 7),
-        to: new Date(),
-    });
+    const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(getDefaultRange());
 
     const [leads, setLeads] = useState<any[]>([]);
     const [serverMetrics, setServerMetrics] = useState<{ totalPositiveLeads: number } | null>(null);
@@ -59,39 +49,14 @@ export default function WhatsappAnalyticsPage() {
     }, [dateRange, fetchData]);
 
     const stats = useMemo(() => {
-        const from = dateRange?.from ? startOfDay(dateRange.from).getTime() : null;
-        const to = endOfDay(dateRange?.to || dateRange?.from || new Date()).getTime();
-        const inRange = (t: number | null) => !from || (t != null && t >= from && t <= to);
-
-        let uniqueSentCount = 0, sentCount = 0, totalReplies = 0;
-        const dailyMap: Record<string, { reachouts: number; replies: number }> = {};
-
-        leads.forEach(lead => {
-            const a = waActivity(lead);
-            const t = a.lastDate ? new Date(a.lastDate).getTime() : null;
-            if (!inRange(t) && t != null) return;
-
-            uniqueSentCount++;
-            sentCount += a.sent;
-            if (a.replied) totalReplies++;
-
-            if (a.lastDate) {
-                const key = new Date(a.lastDate).toISOString().slice(0, 10);
-                if (!dailyMap[key]) dailyMap[key] = { reachouts: 0, replies: 0 };
-                dailyMap[key].reachouts++;
-                if (a.replied) dailyMap[key].replies++;
-            }
-        });
-
-        const trendData = Object.entries(dailyMap)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, { reachouts, replies }]) => ({
-                date: format(new Date(date + "T00:00:00"), "MMM dd"),
-                sent: reachouts,
-                replied: replies,
-            }));
-
-        return { uniqueSentCount, sentCount, totalReplies, trendData };
+        // Shared definitions (lib/channel-metrics.ts) — identical on every WhatsApp page and the Master dashboard.
+        const st = waStats(leads, rangeFromDates(dateRange?.from, dateRange?.to));
+        const trendData = st.daily.map(d => ({
+            date: format(new Date(d.date + "T00:00:00"), "MMM dd"),
+            sent: d.reachouts,
+            replied: d.replies,
+        }));
+        return { uniqueSentCount: st.uniqueContacted, sentCount: st.messagesSent, totalReplies: st.replies, trendData };
     }, [leads, dateRange]);
 
     const replyRate = stats.uniqueSentCount > 0 ? ((stats.totalReplies / stats.uniqueSentCount) * 100).toFixed(1) : "0.0";

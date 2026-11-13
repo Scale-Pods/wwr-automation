@@ -1,3 +1,4 @@
+import { callDateFilter } from '@/lib/call-date-filter';
 import { NextResponse } from 'next/server';
 import { telephonyCost } from '@/lib/telephony-cost';
 import { normalizeCallRoute, isNoAnswerStatus, CALL_ROUTES } from '@/app/api/calls/route';
@@ -114,14 +115,14 @@ export async function GET(req: Request) {
     };
 
     const cols = [
-        'id', 'started_at', 'customer_phone', 'customer_name', 'duration_seconds',
+        'id', 'started_at', 'created_at', 'customer_phone', 'customer_name', 'duration_seconds',
         'status', 'cost_usd', 'vapi_account', 'recording_url', 'assistantId', 'type', 'lead_id',
     ].join(',');
 
-    const dateFilter = `&started_at=gte.${encodeURIComponent(fromISO)}&started_at=lte.${encodeURIComponent(toISO)}`;
+    const dateFilter = callDateFilter(fromISO, toISO);
 
     // All-time count (no date filter)
-    const allTimeCols = ['id', 'started_at', 'duration_seconds', 'status', 'cost_usd', 'vapi_account', 'recording_url'].join(',');
+    const allTimeCols = ['id', 'started_at', 'created_at', 'duration_seconds', 'status', 'cost_usd', 'vapi_account', 'recording_url'].join(',');
 
     try {
         const [datedRows, allTimeRows, leadRows] = await Promise.all([
@@ -262,16 +263,16 @@ export async function GET(req: Request) {
             }
 
             // Daily volume
-            if (r.started_at) {
-                const dayKey = new Date(r.started_at).toISOString().slice(0, 10);
+            if (r.started_at || r.created_at) {
+                const dayKey = new Date(r.started_at || r.created_at).toISOString().slice(0, 10);
                 if (!dailyMap[dayKey]) dailyMap[dayKey] = { calls: 0, cost: 0 };
                 dailyMap[dayKey].calls++;
                 dailyMap[dayKey].cost += cost;
             }
 
             // Hourly distribution
-            if (r.started_at) {
-                const hour = new Date(r.started_at).getUTCHours();
+            if (r.started_at || r.created_at) {
+                const hour = new Date(r.started_at || r.created_at).getUTCHours();
                 hourlyMap[hour] = (hourlyMap[hour] || 0) + 1;
             }
 
@@ -304,6 +305,14 @@ export async function GET(req: Request) {
                 if (isNaN(t) || t < fromMs || t > toMs) continue;
                 totalCalls++;
                 noAnswerCalls++;
+                // Keep the daily / hourly charts in step with the headline total.
+                const dayKey = new Date(t).toISOString().slice(0, 10);
+                if (!dailyMap[dayKey]) dailyMap[dayKey] = { calls: 0, cost: 0 };
+                dailyMap[dayKey].calls++;
+                if (String(dateRaw).length > 10) {
+                    const hr = new Date(t).getUTCHours();
+                    hourlyMap[hr] = (hourlyMap[hr] || 0) + 1;
+                }
                 if (!route) continue;
                 routeBreakdown[route].calls++;
                 routeBreakdown[route].noAnswer++;

@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { Mail, Send, Inbox, AlertCircle, CheckCircle2, MessageSquareText, Flame, Info } from "lucide-react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useState, useEffect, useCallback } from "react";
@@ -85,7 +86,7 @@ function BreakdownCard({ title, count, total, accentColor }: { title: string; co
 export default function EmailDashboardPage() {
     const router = useRouter();
     const [dateSubtitle, setDateSubtitle] = useState("Last 7 days");
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
     const [board, setBoard] = useState<EmailBoardKey>("all");
     const [metrics, setMetrics] = useState<EmailMetrics | null>(null);
     const [loading, setLoading] = useState(true);

@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { format, subDays, subMonths, subYears, startOfMonth, endOfMonth, startOfDay } from "date-fns"
+import { format, subDays, subMonths, subYears, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { DateRange } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
+import { getDefaultRange } from "@/lib/date-defaults"
 import { Calendar } from "@/components/ui/calendar"
 import {
     Popover,
@@ -21,10 +22,7 @@ export function DateRangePicker({
     className,
     onUpdate,
 }: DateRangePickerProps) {
-    const [date, setDate] = React.useState<DateRange | undefined>({
-        from: subDays(new Date(), 7),
-        to: new Date(),
-    })
+    const [date, setDate] = React.useState<DateRange | undefined>(getDefaultRange())
 
     const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date)
     const [tempLabel, setTempLabel] = React.useState<string | undefined>("Last 7 days")
@@ -50,21 +48,21 @@ export function DateRangePicker({
             label: "Today",
             getValue: () => {
                 const today = new Date();
-                return { from: startOfDay(today), to: today };
+                return { from: startOfDay(today), to: endOfDay(today) };
             }
         },
         {
             label: "Last 7 days",
             getValue: () => {
                 const today = new Date();
-                return { from: startOfDay(subDays(today, 7)), to: today };
+                return { from: startOfDay(subDays(today, 7)), to: endOfDay(today) };
             }
         },
         {
             label: "Last 30 days",
             getValue: () => {
                 const today = new Date();
-                return { from: startOfDay(subDays(today, 30)), to: today };
+                return { from: startOfDay(subDays(today, 30)), to: endOfDay(today) };
             }
         },
         {
@@ -78,21 +76,21 @@ export function DateRangePicker({
             label: "Last 3 Months",
             getValue: () => {
                 const today = new Date();
-                return { from: startOfDay(subMonths(today, 3)), to: today };
+                return { from: startOfDay(subMonths(today, 3)), to: endOfDay(today) };
             }
         },
         {
             label: "Last 6 Months",
             getValue: () => {
                 const today = new Date();
-                return { from: startOfDay(subMonths(today, 6)), to: today };
+                return { from: startOfDay(subMonths(today, 6)), to: endOfDay(today) };
             }
         },
         {
             label: "Last 1 year",
             getValue: () => {
                 const today = new Date();
-                return { from: startOfDay(subYears(today, 1)), to: today };
+                return { from: startOfDay(subYears(today, 1)), to: endOfDay(today) };
             }
         },
     ];

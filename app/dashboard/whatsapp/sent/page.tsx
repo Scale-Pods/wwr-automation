@@ -1,12 +1,13 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { Send, CheckCheck, Clock, XCircle, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useState, useEffect, useMemo } from "react";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { coerceTimestamp } from "@/lib/outreach-types";
+import { coerceTimestamp, isWaSlotProcessed } from "@/lib/outreach-types";
 
 type Row = {
     id: string;
@@ -19,7 +20,7 @@ type Row = {
 };
 
 export default function WhatsappSentPage() {
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
     const [leads, setLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
@@ -48,7 +49,7 @@ export default function WhatsappSentPage() {
                 const message = lead[`wa_${n}`];
                 const status = lead[`wa_${n}_status`];
                 const sentAtRaw = lead[`wa_${n}_sent_at`];
-                if (!message && !status && !sentAtRaw) continue;
+                if (!isWaSlotProcessed(lead, n)) continue; // scheduled-only slots are not sent messages
 
                 const iso = coerceTimestamp(sentAtRaw) || coerceTimestamp(lead.wa_1_sent_at) || lead.created_at || null;
                 const t = iso ? new Date(iso).getTime() : null;
@@ -58,7 +59,7 @@ export default function WhatsappSentPage() {
                 let label: Row["status"] = "Sent";
                 if (s.includes("read")) { label = "Read"; read++; }
                 else if (s.includes("deliver")) { label = "Delivered"; delivered++; }
-                else if (s.includes("fail")) { label = "Failed"; failed++; }
+                else if (s.includes("fail") || /-\s*failed\s*$/i.test(String(sentAtRaw || ""))) { label = "Failed"; failed++; }
                 else { label = "Sent"; sent++; }
 
                 out.push({

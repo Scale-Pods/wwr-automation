@@ -1,5 +1,8 @@
 "use client";
 
+import { emailFrameHtml } from "@/lib/email-content";
+import { EmailHtmlModal } from "@/components/dashboard/email-html-modal";
+import { getDefaultRange } from "@/lib/date-defaults";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -87,7 +90,7 @@ function EmailHtmlPreview({ html, onOpen }: { html: string; onOpen: () => void }
         >
             <iframe
                 ref={ref}
-                srcDoc={html}
+                srcDoc={emailFrameHtml(html)}
                 onLoad={() => { const h = readFrameHeight(ref.current); if (h) setNaturalHeight(Math.min(1400, h)); }}
                 title="Email preview"
                 tabIndex={-1}
@@ -109,33 +112,10 @@ function EmailHtmlPreview({ html, onOpen }: { html: string; onOpen: () => void }
     );
 }
 
-/** Full email rendered in a modal, at its natural height. */
-function EmailHtmlModal({ html, open, onOpenChange }: { html: string; open: boolean; onOpenChange: (v: boolean) => void }) {
-    const ref = useRef<HTMLIFrameElement>(null);
-    const [height, setHeight] = useState(600);
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[88vh] overflow-hidden p-0 gap-0">
-                <DialogHeader className="sr-only"><DialogTitle>Email content</DialogTitle></DialogHeader>
-                <div style={{ maxHeight: "88vh", overflowY: "auto" }}>
-                    <iframe
-                        ref={ref}
-                        srcDoc={html}
-                        onLoad={() => { const h = readFrameHeight(ref.current); if (h) setHeight(Math.min(2000, h)); }}
-                        title="Email content"
-                        style={{ width: "100%", height, border: "none", background: "#fff", display: "block", borderRadius: 8 }}
-                    />
-                </div>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 export default function SentEmailsPage() {
     const { leads: allLeads, loadingLeads } = useData();
     const [page, setPage] = useState(1);
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
     const [sentEmails, setSentEmails] = useState<any[]>([]);
     const loading = loadingLeads;
     const [searchQuery, setSearchQuery] = useState("");
@@ -181,6 +161,7 @@ export default function SentEmailsPage() {
 
                 emails.push({
                     id: `${lead.lead_id || `lead-${leadIndex}`}-email-${slot.n}`,
+                    leadId: lead.lead_id || `lead-${leadIndex}`,
                     recipient: toAddr || lead.name || `Lead ${leadIndex + 1}`,
                     leadName: lead.name || lead.full_name || "",
                     board: leadBoard,
@@ -237,13 +218,16 @@ export default function SentEmailsPage() {
     const totalPages = Math.ceil(filteredEmails.length / ITEMS_PER_PAGE);
     const paginatedEmails = filteredEmails.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
+    // Emails Sent = individual emails in view; sentiment is counted per unique lead
+    // (not per email) so it matches the Email overview / analytics numbers.
     const metrics = (() => {
+        const leadSentiment = new Map<string, string>();
+        for (const e of filteredEmails) leadSentiment.set(String(e.leadId), String(e.sentiment || "").toLowerCase());
         let pos = 0, neg = 0;
-        for (const e of filteredEmails) {
-            const s = String(e.sentiment || "").toLowerCase();
+        leadSentiment.forEach(s => {
             if (s.includes("positive")) pos++;
             if (s.includes("negative")) neg++;
-        }
+        });
         return { total: filteredEmails.length, pos, neg };
     })();
 

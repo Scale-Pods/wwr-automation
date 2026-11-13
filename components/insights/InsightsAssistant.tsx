@@ -147,7 +147,7 @@ export function InsightsAssistant() {
                         cursor: "pointer",
                         transition: "transform 0.2s ease, box-shadow 0.2s ease",
                     }}
-                    className="hover:scale-105 active:scale-95"
+                    className="insights-launcher hover:scale-105 active:scale-95"
                 >
                     <Sparkles size={24} />
                 </button>
@@ -156,6 +156,7 @@ export function InsightsAssistant() {
             {/* Panel */}
             {open && (
                 <div
+                    className="insights-panel"
                     style={{
                         position: "fixed",
                         bottom: 24,

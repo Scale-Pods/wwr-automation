@@ -1,5 +1,8 @@
 "use client";
 
+import { emailFrameHtml } from "@/lib/email-content";
+import { EmailHtmlModal } from "@/components/dashboard/email-html-modal";
+import { getDefaultRange } from "@/lib/date-defaults";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -140,7 +143,7 @@ export default function ReceivedEmailsPage() {
     const [threads, setThreads] = useState<any[]>([]);
     const loading = loadingLeads;
     const [searchQuery, setSearchQuery] = useState("");
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 7), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
     const [sortBy, setSortBy] = useState("newest");
     const [board, setBoard] = useState<EmailBoardKey>("all");
 
@@ -150,9 +153,21 @@ export default function ReceivedEmailsPage() {
 
         (allLeads as OutreachLead[]).forEach((lead, index) => {
             if (!hasEmailReply(lead)) return;
-            const thread = buildThread(lead);
-            if (thread.length === 0) return;
             const trackDate = extractTrackDate(lead.email_reply_track);
+            const thread = buildThread(lead);
+            // email_reply_track says this lead replied even when no message body was
+            // stored — still list it, with a placeholder, so no reply is left out.
+            if (thread.length === 0) {
+                thread.push({
+                    direction: "in",
+                    from: lead.email || "",
+                    to: "",
+                    subject: "Email Reply",
+                    body: "Reply recorded for this lead — the message content was not stored.",
+                    bodyHtml: "",
+                    date: trackDate,
+                });
+            }
             const lastInbound = [...thread].reverse().find(m => m.direction === "in");
             const replyDate = trackDate || lastInbound?.date || lead.last_activity || lead.updated_at || lead.created_at || new Date().toISOString();
             const bk = boardOf(lead);
@@ -324,7 +339,7 @@ function EmailHtmlPreview({ html, onOpen }: { html: string; onOpen: () => void }
         >
             <iframe
                 ref={ref}
-                srcDoc={html}
+                srcDoc={emailFrameHtml(html)}
                 onLoad={() => { const h = readFrameHeight(ref.current); if (h) setNaturalHeight(Math.min(1400, h)); }}
                 title="Email preview"
                 tabIndex={-1}
@@ -348,29 +363,6 @@ function EmailHtmlPreview({ html, onOpen }: { html: string; onOpen: () => void }
                 View full email <ChevronDown style={{ width: 11, height: 11 }} />
             </div>
         </div>
-    );
-}
-
-/** Full email rendered in a modal, at its natural height. */
-function EmailHtmlModal({ html, open, onOpenChange }: { html: string; open: boolean; onOpenChange: (v: boolean) => void }) {
-    const ref = useRef<HTMLIFrameElement>(null);
-    const [height, setHeight] = useState(600);
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[88vh] overflow-hidden p-0 gap-0">
-                <DialogHeader className="sr-only"><DialogTitle>Email content</DialogTitle></DialogHeader>
-                <div style={{ maxHeight: "88vh", overflowY: "auto" }}>
-                    <iframe
-                        ref={ref}
-                        srcDoc={html}
-                        onLoad={() => { const h = readFrameHeight(ref.current); if (h) setHeight(Math.min(2000, h)); }}
-                        title="Email content"
-                        style={{ width: "100%", height, border: "none", background: "#fff", display: "block", borderRadius: 8 }}
-                    />
-                </div>
-            </DialogContent>
-        </Dialog>
     );
 }
 

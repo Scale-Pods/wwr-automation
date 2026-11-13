@@ -1,5 +1,6 @@
 "use client";
 
+import { getDefaultRange } from "@/lib/date-defaults";
 import { WorldWideLoader } from "@/components/world-wide-loader";
 import { Input } from "@/components/ui/input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -22,7 +23,7 @@ export default function BouncedEmailsPage() {
     const loading = loadingLeads;
 
     const [searchTerm, setSearchTerm] = useState("");
-    const [dateRange, setDateRange] = useState<any>({ from: subDays(new Date(), 30), to: new Date() });
+    const [dateRange, setDateRange] = useState<any>(getDefaultRange());
     const [board, setBoard] = useState<EmailBoardKey>("all");
 
     const bouncedLeads = useMemo(() => {

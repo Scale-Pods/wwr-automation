@@ -101,3 +101,36 @@ export const getEmailDetailsFromTemplates = (stage: string, leadName: string = "
         loop: loop || "Unknown"
     };
 };
+
+/**
+ * Display-layer cleanup for stored outreach HTML: the template shows the brand
+ * twice — as the logo's alt text and again as a text "eyebrow" line right under
+ * it — which reads as "World Wide Real Estate World Wide Real Estate". Blank the
+ * logo alt and drop an eyebrow that only repeats the brand. Stored data is untouched.
+ */
+export function dedupeBrandHtml(html: string): string {
+    if (!html || !/World Wide Real Estate/i.test(html)) return html;
+    return html
+        .replace(/(<img\b[^>]*\balt=)(["'])World Wide Real Estate\2/gi, '$1$2$2')
+        .replace(/<p\b[^>]*class=["'][^"']*\beyebrow\b[^"']*["'][^>]*>\s*World Wide Real Estate\s*<\/p>/gi, '');
+}
+
+/**
+ * HTML for the email iframes (preview strip + full modal): brand de-duplicated
+ * and made responsive — no horizontal overflow, images/tables never wider than the
+ * frame, so the email stays centered and readable from phone to desktop.
+ */
+export function emailFrameHtml(html: string): string {
+    const cleaned = dedupeBrandHtml(html || '');
+    const inject =
+        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+        '<style>' +
+        'html,body{margin:0!important;padding:0;width:100%!important;overflow-x:hidden!important;-webkit-text-size-adjust:100%}' +
+        'img{max-width:100%!important;height:auto!important}' +
+        'table{max-width:100%!important}' +
+        'table[width="600"]{width:100%!important;max-width:600px!important;margin-left:auto!important;margin-right:auto!important}' +
+        '*{box-sizing:border-box}' +
+        '</style>';
+    if (/<head[^>]*>/i.test(cleaned)) return cleaned.replace(/<head[^>]*>/i, m => m + inject);
+    return inject + cleaned;
+}

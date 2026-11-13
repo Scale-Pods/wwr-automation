@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { OUTREACH_TABLE, hasEmailReply, isEmailSlotSent, isEoiEmailSentiment } from '@/lib/outreach-types';
+import { OUTREACH_TABLE } from '@/lib/outreach-types';
+import { emailStats, rangeFromISO } from '@/lib/channel-metrics';
 import { boardOf, matchesBoard, type EmailBoardKey } from '@/lib/email-board';
 
 export const dynamic = 'force-dynamic';
@@ -76,73 +77,22 @@ export async function GET(req: Request) {
             headers
         );
 
-        let sent = 0, replies = 0, posSentiment = 0, negSentiment = 0, eoiLeads = 0, leadsEmailed = 0;
-        const perStep = [0, 0, 0, 0, 0, 0, 0, 0];
-        const dailyMap: Record<string, { sent: number; replies: number }> = {};
-
-        rows.forEach(r => {
-            if (!matchesBoard(r, board)) return;
-
-            // Earliest actually-sent slot's timestamp dates this lead's email
-            // activity, mirroring how /api/metrics/whatsapp dates WhatsApp activity.
-            let earliestMs: number | null = null;
-            let slotsSent = 0;
-            const sentSlotIndexes: number[] = [];
-            for (let n = 1; n <= 8; n++) {
-                const content = r[`email_${n}`];
-                const status = r[`email_${n}_status`];
-                if (!content || !isEmailSlotSent(status)) continue;
-                slotsSent++;
-                sentSlotIndexes.push(n);
-                const sentAtRaw = r[`email_${n}_sent_at`];
-                const ms = sentAtRaw ? new Date(sentAtRaw).getTime() : NaN;
-                if (!isNaN(ms) && (earliestMs == null || ms < earliestMs)) earliestMs = ms;
-            }
-
-            const replied = hasEmailReply(r);
-            // A lead can carry email_sentiment (and an EOI/reply signal) from an
-            // inbound-only thread even when we never sent an outbound email_N slot
-            // (e.g. someone emailing in cold) — don't gate sentiment/EOI counting
-            // behind slotsSent, only the "emails sent" totals need that.
-            const hasEmailActivity = slotsSent > 0 || replied || !!r.email_sentiment;
-            if (!hasEmailActivity) return;
-
-            const dateRef = earliestMs
-                ?? (r.email_reply_track ? new Date(r.email_reply_track.match(/\d{4}-\d{2}-\d{2}T[\d:.]+/)?.[0] || r.created_at || 0).getTime() : null)
-                ?? (r.created_at ? new Date(r.created_at).getTime() : null);
-            if (dateRef == null || isNaN(dateRef) || dateRef < fromMs || dateRef > toMs) return;
-
-            leadsEmailed++;
-            sent += slotsSent;
-            sentSlotIndexes.forEach(n => perStep[n - 1]++);
-
-            if (replied) replies++;
-
-            const sentiment = String(r.email_sentiment || '').toLowerCase();
-            if (sentiment.includes('positive')) posSentiment++;
-            if (sentiment.includes('negative')) negSentiment++;
-            if (isEoiEmailSentiment(r.email_sentiment)) eoiLeads++;
-
-            const key = new Date(dateRef).toISOString().slice(0, 10);
-            if (!dailyMap[key]) dailyMap[key] = { sent: 0, replies: 0 };
-            dailyMap[key].sent += slotsSent;
-            if (replied) dailyMap[key].replies++;
-        });
-
-        const dailyTrend = Object.entries(dailyMap)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, v]) => ({ date, ...v }));
+        const st = emailStats(
+            rows,
+            rangeFromISO(new Date(fromMs).toISOString(), new Date(toMs).toISOString()),
+            r => matchesBoard(r, board),
+        );
 
         const metrics: EmailMetrics = {
-            totalEmailsSent: sent,
-            totalReplies: replies,
-            replyRate: sent > 0 ? Math.round((replies / sent) * 100) : 0,
-            totalPosSentiment: posSentiment,
-            totalNegSentiment: negSentiment,
-            totalEoiLeads: eoiLeads,
-            totalLeadsEmailed: leadsEmailed,
-            perStep,
-            dailyTrend,
+            totalEmailsSent: st.emailsSent,
+            totalReplies: st.replies,
+            replyRate: st.emailsSent > 0 ? Math.round((st.replies / st.emailsSent) * 100) : 0,
+            totalPosSentiment: st.posSentiment,
+            totalNegSentiment: st.negSentiment,
+            totalEoiLeads: st.eoiLeads,
+            totalLeadsEmailed: st.uniqueEmailed,
+            perStep: st.perStep,
+            dailyTrend: st.daily,
         };
 
         return new NextResponse(JSON.stringify(metrics), {
