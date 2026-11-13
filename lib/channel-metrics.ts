@@ -33,7 +33,7 @@
 import {
     coerceTimestamp, parseJsonArray, parseJsonObject, parseQatarDateTime,
     isReplyTrackPositive, isInboundMessage, isOutboundMessage, isHotWaSentiment,
-    isEmailSlotSent, hasEmailReply, isEoiEmailSentiment,
+    isEmailSlotSent, hasEmailReply, isEoiEmailSentiment, isPositiveEmailSentiment, isNegativeEmailSentiment,
 } from './outreach-types';
 
 export interface MsRange { from: number | null; to: number | null }
@@ -217,9 +217,6 @@ export function emailStats(rows: any[], r: MsRange, include?: (row: any) => bool
                 const key = new Date(e.ms!).toISOString().slice(0, 10);
                 (dailyMap[key] ||= { sent: 0, replies: 0 }).sent++;
             });
-            const s = String(row?.email_sentiment || '').toLowerCase();
-            if (s.includes('positive')) pos++;
-            if (s.includes('negative')) neg++;
             if (isEoiEmailSentiment(row?.email_sentiment)) eoi++;
         }
 
@@ -227,6 +224,10 @@ export function emailStats(rows: any[], r: MsRange, include?: (row: any) => bool
             const rms = emailReplyMs(row);
             if (inRange(rms, r)) {
                 replies++;
+                // Sentiment is a property of the reply, so count it for replies in
+                // range — identical to the Received Emails page and the assistant.
+                if (isPositiveEmailSentiment(row?.email_sentiment, row?.lead_stage)) pos++;
+                if (isNegativeEmailSentiment(row?.email_sentiment, row?.lead_stage)) neg++;
                 const key = new Date(rms!).toISOString().slice(0, 10);
                 (dailyMap[key] ||= { sent: 0, replies: 0 }).replies++;
             }

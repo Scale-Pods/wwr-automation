@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { format, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
-import { coerceTimestamp, parseJsonArray, hasEmailReply } from "@/lib/outreach-types";
+import { coerceTimestamp, parseJsonArray, hasEmailReply, isPositiveEmailSentiment, isNegativeEmailSentiment } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
 import { boardOf, boardLabel, type EmailBoardKey } from "@/lib/email-board";
@@ -184,6 +184,7 @@ export default function ReceivedEmailsPage() {
                 replyDateISO: replyDate,
                 replyDateLabel: (() => { try { return format(new Date(replyDate), "MMM dd, yyyy • p"); } catch { return "Unknown Date"; } })(),
                 sentiment: lead.email_sentiment || null,
+                leadStage: lead.lead_stage || null,
                 propertyType: lead.property_type || "",
                 propertyCategory: lead.property_category || "",
                 messageCount: thread.length,
@@ -222,9 +223,8 @@ export default function ReceivedEmailsPage() {
     const metrics = useMemo(() => {
         let pos = 0, neg = 0;
         filtered.forEach(t => {
-            const s = String(t.sentiment || "").toLowerCase();
-            if (s.includes("positive")) pos++;
-            if (s.includes("negative")) neg++;
+            if (isPositiveEmailSentiment(t.sentiment, t.leadStage)) pos++;
+            if (isNegativeEmailSentiment(t.sentiment, t.leadStage)) neg++;
         });
         return { total: filtered.length, pos, neg };
     }, [filtered]);

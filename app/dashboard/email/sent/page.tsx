@@ -15,7 +15,7 @@ import { format, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
 import { WorldWideLoader } from "@/components/world-wide-loader";
-import { coerceTimestamp } from "@/lib/outreach-types";
+import { coerceTimestamp, isPositiveEmailSentiment, isNegativeEmailSentiment } from "@/lib/outreach-types";
 import type { OutreachLead } from "@/lib/outreach-types";
 import { EmailBoardFilter } from "@/components/dashboard/email-board-filter";
 import { boardOf, matchesBoard, boardLabel, type EmailBoardKey } from "@/lib/email-board";
@@ -167,6 +167,7 @@ export default function SentEmailsPage() {
                     board: leadBoard,
                     boardLabel: boardLabel(leadBoard),
                     sentiment: lead.email_sentiment || "",
+                    leadStage: lead.lead_stage || "",
                     note: lead.email_note || "",
                     propertyType: lead.property_type || "",
                     propertyCategory: lead.property_category || "",
@@ -221,12 +222,12 @@ export default function SentEmailsPage() {
     // Emails Sent = individual emails in view; sentiment is counted per unique lead
     // (not per email) so it matches the Email overview / analytics numbers.
     const metrics = (() => {
-        const leadSentiment = new Map<string, string>();
-        for (const e of filteredEmails) leadSentiment.set(String(e.leadId), String(e.sentiment || "").toLowerCase());
+        const leadSentiment = new Map<string, { s: string; st: string }>();
+        for (const e of filteredEmails) leadSentiment.set(String(e.leadId), { s: String(e.sentiment || ""), st: String((e as any).leadStage || "") });
         let pos = 0, neg = 0;
-        leadSentiment.forEach(s => {
-            if (s.includes("positive")) pos++;
-            if (s.includes("negative")) neg++;
+        leadSentiment.forEach(({ s, st }) => {
+            if (isPositiveEmailSentiment(s, st)) pos++;
+            if (isNegativeEmailSentiment(s, st)) neg++;
         });
         return { total: filteredEmails.length, pos, neg };
     })();

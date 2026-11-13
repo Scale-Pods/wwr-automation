@@ -127,20 +127,29 @@ export async function POST(req: Request) {
     }
 
     try {
-        const res = await fetch(WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'sendMessage',
-                chatInput: message,
-                sessionId,
-            }),
-            // the agent can take 20-60s to think + query Supabase
-            signal: AbortSignal.timeout(180_000),
-            cache: 'no-store',
-        });
-
-        const text = await res.text();
+        // The n8n host occasionally answers 502/503/504 from its reverse proxy
+        // before the workflow even starts (no execution is recorded). Those are
+        // safe to retry once or twice; real workflow errors are not retried.
+        let res!: Response;
+        let text = '';
+        for (let attempt = 0; attempt < 3; attempt++) {
+            res = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'sendMessage',
+                    chatInput: message,
+                    sessionId,
+                }),
+                // the agent can take 20-60s to think + query Supabase
+                signal: AbortSignal.timeout(180_000),
+                cache: 'no-store',
+            });
+            text = await res.text();
+            if (![502, 503, 504].includes(res.status)) break;
+            console.warn('[insights-chat] gateway error', res.status, 'attempt', attempt + 1);
+            await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        }
         if (!res.ok) {
             console.error('[insights-chat] n8n error', res.status, text);
             return NextResponse.json(

@@ -252,6 +252,28 @@ export function isEoiEmailSentiment(v: any): boolean {
     return s.includes('expression of interest') || s.includes('positive');
 }
 
+const POSITIVE_EMAIL_STATUS = ['expression of interest', 'proposal requested', 'viewing scheduled', 'callback- plan postponed', 'callback - plan postponed'];
+
+/**
+ * Positive email reply. email_sentiment is free text such as
+ * "neutral | Status: Expression Of Interest", so a plain "positive" substring
+ * check misses almost every interested lead. Same rule family as calls
+ * (positive / curious sentiment, or a hot-lead status).
+ */
+export function isPositiveEmailSentiment(v: any, leadStage?: any): boolean {
+    const s = String(v ?? '').trim().toLowerCase();
+    if (!s || isNegativeEmailSentiment(s, leadStage)) return false;
+    return s.includes('positive') || s.includes('curious') || s.trim() === 'hot' || POSITIVE_EMAIL_STATUS.some(t => s.includes(t));
+}
+
+export function isNegativeEmailSentiment(v: any, leadStage?: any): boolean {
+    const s = String(v ?? '').trim().toLowerCase();
+    // lead_stage = "Negative Lead" is how the workflow flags misdirected / unwanted
+    // replies (their email_sentiment is just "neutral | Status: Referred- ...").
+    if (/negative/i.test(String(leadStage ?? ''))) return true;
+    return s.includes('negative') || s.includes('not interested') || s.includes('do not contact') || s.includes('unsubscribe');
+}
+
 /**
  * Count of outbound WhatsApp messages for one outreach_table row.
  * The number of outbound bubbles in whatsapp_conversation, but never less than
