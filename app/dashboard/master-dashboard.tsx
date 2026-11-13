@@ -239,7 +239,7 @@ export default function MasterDashboard() {
             <div className="metric-grid-6">
                 <MetricTile
                     title="Total Leads"
-                    value={loadingMasterLeadsTotal && masterLeadsTotal == null ? '—' : (masterLeadsTotal ?? 0).toLocaleString()}
+                    value={loading ? '—' : (m?.totalLeads ?? 0).toLocaleString()}
                     trend="From outreach_table"
                     trendDir="neutral"
                     accentColor="var(--blue)"
