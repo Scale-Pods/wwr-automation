@@ -242,7 +242,9 @@ export async function GET(req: Request) {
                 const cp = String(r.customer_phone || '').replace(/\D/g, '');
                 if (cp.length >= 6) routeLead = leadByPhone.get(cp);
             }
-            const route = routeLead ? normalizeCallRoute(routeLead.call_route) : null;
+            // Inbound callers that aren't in outreach_table have no lead, so fall back to the
+            // Vapi account the call came in on ("Commercial leads" / "Residential leads" / ...).
+            const route = (routeLead ? normalizeCallRoute(routeLead.call_route) : null) ?? normalizeCallRoute(r.vapi_account);
             if (route) {
                 routeBreakdown[route].calls++;
                 if (isCompleted) routeBreakdown[route].connected++;

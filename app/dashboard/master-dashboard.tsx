@@ -240,7 +240,7 @@ export default function MasterDashboard() {
                 <MetricTile
                     title="Total Leads"
                     value={loadingMasterLeadsTotal && masterLeadsTotal == null ? '—' : (masterLeadsTotal ?? 0).toLocaleString()}
-                    trend="From master_leads"
+                    trend="From outreach_table"
                     trendDir="neutral"
                     accentColor="var(--blue)"
                     icon={<Users size={17} />}

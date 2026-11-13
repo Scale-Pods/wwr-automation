@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const MASTER_LEADS_TABLE = 'master_leads';
+// Total Leads = rows in outreach_table (the same source as the Leads page and the AI assistant).
+const MASTER_LEADS_TABLE = 'outreach_table';
 
 function endOfDay(iso: string): string {
     const d = new Date(iso);

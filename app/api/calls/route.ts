@@ -252,7 +252,7 @@ async function fetchArchivedCallLogs(fromDate: Date | null, toDate: Date | null)
             phoneNumber: 'Unknown',
             sentiment,
             note,
-            callRoute: lead ? normalizeCallRoute(lead.call_route) : null,
+            callRoute: (lead ? normalizeCallRoute(lead.call_route) : null) ?? normalizeCallRoute(d.vapi_account),
             isNoAnswer: false,
             breakdown: { agent: agentCost, telephony, total: totalCost },
             raw: { id: d.id, startedAt: d.started_at || d.created_at, assistantId: d.assistantId, isInbound, lead_id: d.lead_id },
