@@ -1378,9 +1378,9 @@ img, video, canvas, svg { max-width: 100%; }
    ═══════════════════════════════════════════════════════════════ */
 @media (max-width: 1023px) {
     /* Drawer "Powered by ScalePods": larger + higher contrast so it reads clearly */
-    .powered-by { gap: 6px !important; margin-top: 14px !important; }
-    .powered-by-label { font-size: 12px !important; color: var(--label-secondary) !important; }
-    .powered-by-logo { width: 140px !important; height: 44px !important; }
+    .powered-by { gap: 3px !important; margin-top: 8px !important; }
+    .powered-by-label { font-size: 10px !important; }
+    .powered-by-logo { width: 84px !important; height: 26px !important; }
 
     /* Insights assistant: small icon button in the top-right of the top bar
        instead of a big floating button that covers page controls */

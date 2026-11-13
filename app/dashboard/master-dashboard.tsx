@@ -164,24 +164,47 @@ export default function MasterDashboard() {
         };
     }, [allLeads, loadingLeads, calls, loadingCalls, dateRange]);
 
-    /* ── Daily chart data ── */
+    /* ── Daily chart data: one point per day of the SELECTED range (zero-filled, Qatar days).
+          Ranges longer than ~3 months roll up to months so the axis stays readable. ── */
     const chartData = useMemo(() => {
-        if (!allLeads.length || loadingLeads) return [];
-        const counts: Record<string, { date: string; leads: number }> = {};
+        if (loadingLeads) return [];
+        const OFFSET = 3 * 3600000, DAY = 86400000;
+        const qDay = (ms: number) => new Date(ms + OFFSET).toISOString().slice(0, 10);
+
+        const times: number[] = [];
         allLeads.forEach((lead: any) => {
-            if (!lead.created_at) return;
-            const key = new Date(lead.created_at).toISOString().slice(0, 10);
-            if (!counts[key]) counts[key] = { date: key, leads: 0 };
-            counts[key].leads++;
+            const t = lead.created_at ? new Date(lead.created_at).getTime() : NaN;
+            if (!isNaN(t)) times.push(t);
         });
-        return Object.values(counts)
-            .sort((a, b) => a.date.localeCompare(b.date))
-            .slice(-30)
-            .map(d => ({
-                ...d,
-                name: format(new Date(d.date + 'T00:00:00'), 'MMM dd'),
-            }));
-    }, [allLeads, loadingLeads]);
+        if (!times.length && !dateRange?.from) return [];
+
+        // Range = the picker's range; if it was cleared, span all leads.
+        const r = dateRange?.from
+            ? rangeFromDates(dateRange.from, dateRange.to)
+            : { from: Math.min(...times), to: Math.max(...times) };
+        const from = r.from as number, to = Math.min(r.to as number, Date.now() + DAY);
+
+        const days = Math.max(1, Math.round((new Date(qDay(to)).getTime() - new Date(qDay(from)).getTime()) / DAY) + 1);
+        const monthly = days > 92;
+        const bucketOf = (iso: string) => (monthly ? iso.slice(0, 7) : iso);
+
+        const counts: Record<string, number> = {};
+        for (let i = 0; i < days; i++) {
+            const iso = new Date(new Date(qDay(from)).getTime() + i * DAY).toISOString().slice(0, 10);
+            counts[bucketOf(iso)] = 0;
+        }
+        times.forEach(t => {
+            if (t < from || t > to) return;
+            const k = bucketOf(qDay(t));
+            if (k in counts) counts[k]++;
+        });
+
+        return Object.entries(counts).map(([key, leads]) => ({
+            date: key,
+            leads,
+            name: monthly ? format(new Date(key + '-01T00:00:00'), 'MMM yyyy') : format(new Date(key + 'T00:00:00'), 'MMM dd'),
+        }));
+    }, [allLeads, loadingLeads, dateRange]);
 
     /* ── Channel mix data ── */
     const serviceDistribution = useMemo(() => {

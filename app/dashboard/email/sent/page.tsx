@@ -1,6 +1,6 @@
 "use client";
 
-import { emailFrameHtml } from "@/lib/email-content";
+import { emailFrameHtml, dedupeBrandHtml } from "@/lib/email-content";
 import { EmailHtmlModal } from "@/components/dashboard/email-html-modal";
 import { getDefaultRange } from "@/lib/date-defaults";
 import { Input } from "@/components/ui/input";
@@ -335,7 +335,26 @@ function SentEmailCard({ email }: { email: any }) {
     const [isOpen, setIsOpen] = useState(false);
     const [htmlModalOpen, setHtmlModalOpen] = useState(false);
     const isHtmlDoc = isFullHtmlDocument(email.content);
-    const stripHtml = (html: string) => !html ? "" : html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<(br|p|div|li|h[1-6])[^>]*>/gi, " ").replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
+    // Plain-text preview for the collapsed row: drop <head>/<title>/<style>/comments and the
+    // duplicated brand lines of our template, so it starts with the actual message.
+    const stripHtml = (html: string) => {
+        if (!html) return "";
+        const text = dedupeBrandHtml(html)
+            .replace(/<head[\s\S]*?<\/head>/gi, " ")
+            .replace(/<title[\s\S]*?<\/title>/gi, " ")
+            .replace(/<style[\s\S]*?<\/style>/gi, " ")
+            .replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<!--[\s\S]*?-->/g, " ")
+            .replace(/<(br|p|div|li|h[1-6]|tr|td)[^>]*>/gi, " ")
+            .replace(/<\/?[^>]+(>|$)/g, "")
+            .replace(/&nbsp;/gi, " ")
+            .replace(/&#39;|&apos;/gi, "'")
+            .replace(/&quot;/gi, '"')
+            .replace(/&amp;/gi, "&")
+            .replace(/\s+/g, " ")
+            .trim();
+        return text.replace(/^(World Wide Real Estate\s+)+/i, "");
+    };
 
     return (
         <Collapsible open={isOpen} onOpenChange={setIsOpen} className="liquid-card" style={{ padding: 0, overflow: "hidden", transition: "all 150ms" }}>

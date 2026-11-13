@@ -229,11 +229,11 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                         )}
                     </div>
                     {isExpanded && (
-                        <div className="powered-by" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, marginTop: 12 }}>
-                            <span className="powered-by-label" style={{ fontSize: 12, fontWeight: 600, color: 'var(--label-tertiary)', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                        <div className="powered-by" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, marginTop: 10 }}>
+                            <span className="powered-by-label" style={{ fontSize: 10, fontWeight: 600, color: 'var(--label-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                                 Powered by
                             </span>
-                            <div className="powered-by-logo" style={{ position: 'relative', width: 100, height: 32 }}>
+                            <div className="powered-by-logo" style={{ position: 'relative', width: 84, height: 26 }}>
                                 <Image src="/scalepods-logo.png" alt="ScalePods" fill className="object-contain" />
                             </div>
                         </div>
